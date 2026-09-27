@@ -1,0 +1,2 @@
+happybase==1.2.0
+thriftpy2==0.4.20

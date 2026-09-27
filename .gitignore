@@ -1,0 +1,35 @@
+# secrets / local config
+.env
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# runtime artifacts (these were committed by mistake before)
+checkpoints/
+output/
+airflow-db/
+docker/airflow-db/
+*.pid
+*.crc
+.state/
+labels/
+*.log
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Runtime state / generated data
+.venv/
+.pytest_cache/
+__pycache__/
+labels/*.csv
+reports/*.txt
+models/
+serving-data/
+*.db

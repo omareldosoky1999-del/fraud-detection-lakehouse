@@ -1,0 +1,302 @@
+version: '3.8'
+
+# Usage:
+#   docker compose -f docker/docker-compose.yml up -d
+#   docker compose -f docker/docker-compose.yml --profile serving --profile warehouse --profile orchestration --profile monitoring up -d
+#
+# Foundational services are always active: zookeeper, kafka, schema-registry,
+# HDFS and Spark. Optional profiles add serving, warehouse, orchestration and monitoring.
+#
+# Everything not listed here (MinIO, Iceberg/Nessie, Trino, Marquez, MLflow,
+# the old FinGuard pipeline, k8s manifests) was archived, not deleted -- see
+# archive/README.md. Re-add a service here if/when that work resumes.
+
+services:
+
+  # ------------------------------------------------------------------
+  # CORE: messaging
+  # ------------------------------------------------------------------
+  zookeeper:
+    image: zookeeper:3.8
+    container_name: zookeeper
+    ports: ["2181:2181"]
+    volumes:
+      - zookeeper_data:/data
+      - zookeeper_logs:/datalog
+    networks: [fraud-net]
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    ports: ["9092:9092", "29092:29092"]
+    volumes:
+      - ./kafka:/kafka-scripts:ro
+      - kafka_data:/var/lib/kafka/data
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on: [zookeeper]
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    networks: [fraud-net]
+    restart: unless-stopped
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    container_name: schema-registry
+    ports: ["8081:8081"]
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    depends_on:
+      kafka: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/subjects"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
+    networks: [fraud-net]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # CORE: HDFS
+  # ------------------------------------------------------------------
+  namenode:
+    image: apache/hadoop:3.3.6
+    container_name: namenode
+    hostname: namenode
+    ports: ["9870:9870", "8020:8020"]
+    environment:
+      - CORE-SITE.XML_fs.defaultFS=hdfs://namenode:8020
+      - HADOOP_HOME=/opt/hadoop
+    command: >
+      bash -c "if [ ! -d /hadoop/dfs/name/current ]; then
+        /opt/hadoop/bin/hdfs namenode -format -force;
+      fi; /opt/hadoop/bin/hdfs namenode"
+    volumes: ["hadoop_namenode:/hadoop/dfs/name"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870/dfshealth.html"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    deploy: {resources: {limits: {memory: 3g}}}
+    networks: [fraud-net]
+    restart: unless-stopped
+
+  datanode:
+    image: apache/hadoop:3.3.6
+    container_name: datanode
+    hostname: datanode
+    ports: ["9864:9864"]
+    environment:
+      - CORE-SITE.XML_fs.defaultFS=hdfs://namenode:8020
+      - HADOOP_HOME=/opt/hadoop
+    command: /opt/hadoop/bin/hdfs datanode
+    volumes: ["hadoop_datanode:/hadoop/dfs/data"]
+    depends_on:
+      namenode: {condition: service_healthy}
+    deploy: {resources: {limits: {memory: 2g}}}
+    networks: [fraud-net]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # CORE: Spark
+  # ------------------------------------------------------------------
+  spark-master:
+    build:
+      context: ./spark
+      args: {BASE_IMAGE: bde2020/spark-master:3.0.0-hadoop3.2}
+    container_name: spark-master
+    depends_on:
+      namenode: {condition: service_healthy}
+      datanode: {condition: service_started}
+    ports: ["8083:8083", "7077:7077", "8090:8090", "8091:8000"]
+    volumes: ["..:/app"]
+    environment:
+      - INIT_DAEMON_STEP=setup_spark
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_LOCAL_IP=spark-master
+      - METRICS_PORT=8000
+      - PYTHONPATH=/app
+    networks: [fraud-net]
+    restart: unless-stopped
+
+  spark-worker:
+    build:
+      context: ./spark
+      args: {BASE_IMAGE: bde2020/spark-worker:3.0.0-hadoop3.2}
+    container_name: spark-worker
+    depends_on: [spark-master]
+    ports: ["8082:8081"]
+    volumes: ["..:/app"]
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - SPARK_LOCAL_IP=spark-worker
+      - PYTHONPATH=/app
+    networks: [fraud-net]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # SERVING: HBase
+  # ------------------------------------------------------------------
+  serving-api:
+    build: {context: .., dockerfile: docker/serving/Dockerfile}
+    container_name: serving-api
+    ports: ["8095:8095"]
+    environment:
+      - HBASE_HOST=hbase
+      - HBASE_THRIFT_PORT=9090
+      - API_PORT=8095
+    depends_on:
+      hbase: {condition: service_started}
+    networks: [fraud-net]
+    profiles: [serving]
+    restart: unless-stopped
+
+  hbase:
+    image: harisekhon/hbase:2.1
+    container_name: hbase
+    ports: ["16010:16010", "9090:9090"]
+    volumes:
+      - hbase_data:/hbase-data
+    depends_on: [zookeeper]
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          (echo "create_namespace 'fraud'" | hbase shell -n >/dev/null 2>&1 || true) &&
+          (echo "create 'fraud:client_risk', 'cf'" | hbase shell -n >/dev/null 2>&1 || true) &&
+          echo 'status' | hbase shell -n >/dev/null 2>&1
+      interval: 20s
+      timeout: 15s
+      retries: 20
+      start_period: 45s
+    deploy: {resources: {limits: {memory: 2g}}}
+    networks: [fraud-net]
+    profiles: [serving]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # WAREHOUSE: Hive (SQL over Silver/Gold)
+  # ------------------------------------------------------------------
+  hive:
+    image: apache/hive:3.1.3
+    container_name: hive
+    ports: ["10000:10000", "10002:10002"]
+    volumes:
+      - ..:/app:ro
+      - hive_data:/opt/hive/data
+    environment:
+      - SERVICE_NAME=hiveserver2
+      - HIVE_METASTORE_DB_TYPE=derby
+      - SERVICE_OPTS=-Dhive.metastore.warehouse.dir=hdfs://namenode:8020/user/hive/warehouse
+    healthcheck:
+      test: ["CMD", "bash", "-c", "nc -z localhost 10000"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 40s
+    depends_on:
+      namenode: {condition: service_healthy}
+    networks: [fraud-net]
+    profiles: [warehouse]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # ORCHESTRATION: Airflow (single container, `airflow standalone`:
+  # webserver + scheduler + triggerer + one-time db/user setup)
+  # ------------------------------------------------------------------
+  airflow:
+    build: {context: ./airflow}
+    container_name: airflow
+    user: root
+    depends_on: [namenode]
+    ports: ["8088:8080"]
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/data/airflow.db
+      - _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_ADMIN_USER:-admin}
+      - _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_ADMIN_PASSWORD:-change-me}
+    command: standalone
+    volumes:
+      - ../orchestration/dags:/opt/airflow/dags:ro
+      - airflow-db:/opt/airflow/data
+      # lets the DAG's BashOperator run `docker exec spark-master ...` /
+      # `docker exec hive ...` against the SAME docker daemon as the host,
+      # instead of needing Spark/Hive clients installed in this image.
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [fraud-net]
+    profiles: [orchestration]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # MONITORING (optional)
+  # ------------------------------------------------------------------
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.10.0
+    container_name: kafka-exporter
+    command: ["--kafka.server=kafka:9092"]
+    ports: ["9308:9308"]
+    depends_on: [kafka]
+    networks: [fraud-net]
+    profiles: [monitoring]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: prometheus
+    ports: ["9091:9090"]
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on: [kafka-exporter]
+    networks: [fraud-net]
+    profiles: [monitoring]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.0-slim
+    container_name: grafana
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
+    networks: [fraud-net]
+    profiles: [monitoring]
+    restart: unless-stopped
+
+networks:
+  fraud-net:
+    driver: bridge
+
+volumes:
+  airflow-db:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_logs:
+  hbase_data:
+  hadoop_namenode:
+  hadoop_datanode:
+  hive_data:
+  prometheus-data:
+  grafana-data:

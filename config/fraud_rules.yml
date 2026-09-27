@@ -1,0 +1,40 @@
+# Fraud-rule configuration. Keep business thresholds out of Python code so
+# analysts/engineers can tune policy without rebuilding the Spark image.
+rules:
+  HIGH_AMOUNT:
+    severity: HIGH
+    description: "single transaction >= configured USD-equivalent threshold"
+    threshold_usd: 10000
+  STRUCTURING:
+    severity: HIGH
+    description: "3+ transactions just under the reporting threshold within 1 hour"
+    min_usd: 8000
+    max_usd: 9999
+    count: 3
+    window_seconds: 3600
+  IMPOSSIBLE_TRAVEL:
+    severity: HIGH
+    description: "home-country transaction followed by a far-country transaction too quickly"
+    window_seconds: 1800
+  MULE:
+    severity: HIGH
+    description: "large deposit largely withdrawn again within 30 minutes"
+    window_seconds: 1800
+    ratio: 0.85
+    min_deposit_usd: 3000
+  VELOCITY:
+    severity: MEDIUM
+    description: "6+ transactions by one client within 5 minutes"
+    count: 6
+    window_seconds: 300
+  NEW_DEVICE_HIGH_VALUE:
+    severity: MEDIUM
+    description: "new device in the previous 30 days plus a high-value transaction"
+    threshold_usd: 4000
+    lookback_seconds: 2592000
+policy:
+  risk_weights:
+    HIGH: 45
+    MEDIUM: 20
+  home_country: Egypt
+  far_countries: [USA, Canada, Australia, UK, Germany, France, Italy, Spain]

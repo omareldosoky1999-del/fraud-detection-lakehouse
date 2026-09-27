@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Java (required by pyspark)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install pyspark==3.5.1 pandas pyarrow
+
+      - name: Static configuration checks
+        run: python -m compileall -q ingestion processing scripts orchestration && python -c "import yaml; yaml.safe_load(open('config/fraud_rules.yml'))"
+
+      - name: Run tests
+        run: python -m pytest tests -q
+
+      - name: Rules-engine precision/recall report (informational)
+        run: |
+          python -c "
+          import sys; sys.path.insert(0, '.')
+          from datetime import datetime
+          from processing.common.spark_session import get_spark
+          from processing.streaming.transform import to_silver
+          from processing.rules.rules_engine import apply_rules
+          from ingestion.generator.transaction_generator import generate, write_labels
+          import pandas as pd
+
+          events = generate(10000, seed=1, start=datetime(2026, 9, 1), data_dir='ingestion/data')
+          write_labels(events, '/tmp/labels.csv')
+          spark = get_spark('ci-eval', enable_hive=False)
+          silver = to_silver(spark.createDataFrame([e.rec for e in events]))
+          apply_rules(silver).write.mode('overwrite').parquet('/tmp/decisions')
+          spark.stop()
+          "
+          python scripts/evaluate_rules.py --decisions /tmp/decisions --labels /tmp/labels.csv
