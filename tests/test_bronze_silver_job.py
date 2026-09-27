@@ -20,25 +20,35 @@ def spark():
 
 @pytest.fixture
 def warehouse(tmp_path):
-    paths = dict(silver=tmp_path / "silver", quarantine=tmp_path / "quarantine",
-                decisions=tmp_path / "decisions")
+    paths = dict(bronze=tmp_path / "bronze", silver=tmp_path / "silver",
+                quarantine=tmp_path / "quarantine", decisions=tmp_path / "decisions",
+                commits=tmp_path / "commits")
     yield paths
     shutil.rmtree(tmp_path, ignore_errors=True)
 
 
 def raw_row(id, client, t, usd, ttype="Withdrawal", status="Successful", country="Egypt", **kw):
+    # Mirrors what decode_transactions() actually hands to process_batch in
+    # production: the Avro fields PLUS the three Kafka metadata columns
+    # (kafka_partition/kafka_offset feed build_batch_token; kafka_timestamp
+    # feeds _write_bronze's ingest_date). Without these, build_batch_token()
+    # silently falls back to "spark-{batch_id}" and _write_bronze() throws
+    # an AnalysisException on a column that plain unit-built DataFrames
+    # never had -- exactly the gap that let this bug ship untested.
     base = dict(Trans_id=id, Clt_id=client, Card_id=1, Dev_id=1, Trans_amount=usd,
                Trans_date=t.strftime("%Y-%m-%d %I:%M:%S %p"), Trans_type=ttype, Trans_status=status,
                Trans_destination="CIB", Dev_Ip_Location="Cairo", Trans_Ref_No=f"R{id}", Currency="USD",
-               Trans_Reason="Shopping", Dest_account_No=1, Country_Dest="Egypt", Country_Src=country)
+               Trans_Reason="Shopping", Dest_account_No=1, Country_Dest="Egypt", Country_Src=country,
+               kafka_partition=0, kafka_offset=id, kafka_timestamp=t)
     base.update(kw)
     return base
 
 
 def make_processor(spark, warehouse):
     return build_batch_processor(
-        spark, silver_path=str(warehouse["silver"]), quarantine_path=str(warehouse["quarantine"]),
-        decisions_path=str(warehouse["decisions"]), hbase_host=None, hbase_port=None,
+        spark, bronze_path=str(warehouse["bronze"]), silver_path=str(warehouse["silver"]),
+        quarantine_path=str(warehouse["quarantine"]), decisions_path=str(warehouse["decisions"]),
+        commit_root=str(warehouse["commits"]), hbase_host=None, hbase_port=None,
         kafka_bootstrap=None, alerts_topic=None,
     )
 
