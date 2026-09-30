@@ -65,3 +65,16 @@ def test_build_gold_contains_iceberg_dual_write():
     assert "write_gold_tables" in source
     assert 'customer_daily_risk=customer_risk' in source
     assert 'daily_kpis=kpis' in source
+
+
+def test_build_gold_is_iceberg_first_and_hdfs_is_compatibility_path():
+    source = (
+        __import__("pathlib").Path(__file__).parents[1]
+        / "processing"
+        / "batch"
+        / "build_gold.py"
+    ).read_text(encoding="utf-8")
+    assert 'spark.table(' in source
+    assert 'TABLES["decisions"]' in source
+    assert 'LEGACY_HDFS_GOLD_OUTPUT' in source
+    assert 'write_gold_tables' in source
