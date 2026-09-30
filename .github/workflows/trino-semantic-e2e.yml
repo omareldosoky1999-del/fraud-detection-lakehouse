@@ -30,6 +30,9 @@ jobs:
             -f docker/docker-compose.lakehouse.yml \
             --profile lakehouse up -d --build
 
+      - name: Wait for Trino
+        run: bash scripts/wait_for_trino.sh
+
       - name: Seed production-shaped Iceberg tables
         run: |
           docker exec spark-master \
@@ -40,14 +43,14 @@ jobs:
       - name: Apply Trino semantic layer
         run: |
           docker cp warehouse/trino/semantic_views.sql trino:/tmp/semantic_views.sql
-          docker exec trino trino --file /tmp/semantic_views.sql
+          docker exec trino trino --server http://localhost:8080 --file /tmp/semantic_views.sql
 
       - name: Validate semantic queries
         run: |
-          docker exec trino trino --execute "SELECT count(*) AS rows FROM polaris.analytics.fraud_transaction_risk WHERE decision = 'FLAG' AND ml_probability > 0.9"
-          docker exec trino trino --execute "SELECT event_date, total_transactions, flagged_transactions FROM polaris.analytics.daily_fraud_kpis"
-          docker exec trino trino --execute "SELECT client_id, last_decision, last_ml_probability FROM polaris.analytics.client_risk_summary WHERE client_id = 10"
-          docker exec trino trino --execute "SELECT feature_rows, new_device_rate, country_change_rate FROM polaris.analytics.fraud_feature_monitoring WHERE event_date = DATE '2026-09-01'"
+          docker exec trino trino --server http://localhost:8080 --execute "SELECT count(*) AS rows FROM polaris.analytics.fraud_transaction_risk WHERE decision = 'FLAG' AND ml_probability > 0.9"
+          docker exec trino trino --server http://localhost:8080 --execute "SELECT event_date, total_transactions, flagged_transactions FROM polaris.analytics.daily_fraud_kpis"
+          docker exec trino trino --server http://localhost:8080 --execute "SELECT client_id, last_decision, last_ml_probability FROM polaris.analytics.client_risk_summary WHERE client_id = 10"
+          docker exec trino trino --server http://localhost:8080 --execute "SELECT feature_rows, new_device_rate, country_change_rate FROM polaris.analytics.fraud_feature_monitoring WHERE event_date = DATE '2026-09-01'"
 
       - name: Capture logs on failure
         if: failure()
