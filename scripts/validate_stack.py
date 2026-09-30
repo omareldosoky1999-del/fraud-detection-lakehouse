@@ -117,8 +117,8 @@ def main() -> None:
         "mlops": {
             "mlflow-postgres",
             "mlflow",
-            "rustfs",
-            "rustfs-init",
+            "mlflow-rustfs",
+            "mlflow-rustfs-init",
         },
         "lineage": {
             "marquez-db",
