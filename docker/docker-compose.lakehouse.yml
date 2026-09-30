@@ -188,6 +188,12 @@ services:
       - ./trino/catalog:/etc/trino/catalog:ro
     depends_on:
       polaris-setup: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
     networks: [fraud-net]
     profiles: [lakehouse]
     restart: unless-stopped
