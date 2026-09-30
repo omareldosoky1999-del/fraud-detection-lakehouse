@@ -66,8 +66,8 @@ def write_micro_batch(
     batch_token: str,
     bronze: DataFrame,
     quarantine: DataFrame | None,
-    silver: DataFrame,
-    decisions: DataFrame,
+    silver: DataFrame | None,
+    decisions: DataFrame | None,
 ) -> None:
     """Persist one micro-batch to Iceberg.
 
@@ -101,24 +101,25 @@ def write_micro_batch(
             "__iceberg_quarantine_schema",
         )
 
-    _overwrite_partitions(
-        spark,
-        silver,
-        _qualified(catalog, TABLES["silver"]),
-        ["batch_token", "event_date"],
-        "__iceberg_silver_schema",
-    )
-
-    decisions_frame = decisions
-    if "ml_probability" not in decisions_frame.columns:
-        decisions_frame = decisions_frame.withColumn(
-            "ml_probability", F.lit(None).cast("double")
+    if silver is not None:
+        _overwrite_partitions(
+            spark,
+            silver,
+            _qualified(catalog, TABLES["silver"]),
+            ["batch_token", "event_date"],
+            "__iceberg_silver_schema",
         )
 
-    _overwrite_partitions(
-        spark,
-        decisions_frame,
-        _qualified(catalog, TABLES["decisions"]),
-        ["batch_token", "event_date"],
-        "__iceberg_decisions_schema",
-    )
+    if decisions is not None:
+        decisions_frame = decisions
+        if "ml_probability" not in decisions_frame.columns:
+            decisions_frame = decisions_frame.withColumn(
+                "ml_probability", F.lit(None).cast("double")
+            )
+        _overwrite_partitions(
+            spark,
+            decisions_frame,
+            _qualified(catalog, TABLES["decisions"]),
+            ["batch_token", "event_date"],
+            "__iceberg_decisions_schema",
+        )
