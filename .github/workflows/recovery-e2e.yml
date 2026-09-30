@@ -99,14 +99,17 @@ jobs:
       - name: Verify recovered transactions and no duplicate IDs
         run: |
           for i in $(seq 1 40); do
-            total=$(docker exec spark-master bash -lc "hdfs dfs -getmerge /warehouse/gold/fraud_decisions /tmp/recovery-decisions.parquet 2>/dev/null || true; test -s /tmp/recovery-decisions.parquet") || true
-            second=$(docker exec namenode /opt/hadoop/bin/hdfs dfs -find /warehouse/gold/fraud_decisions -name '*.parquet' | wc -l)
-            echo "decision_files=$second"
-            [ "${second:-0}" -gt 1 ] && break
+            if docker exec spark-master /opt/spark/bin/spark-submit \
+              --master spark://spark-master:7077 \
+              /app/scripts/recovery_check.py \
+              --minimum-first 400 \
+              --minimum-second 300; then
+              exit 0
+            fi
             sleep 3
           done
-          docker exec spark-master bash -lc 'tail -200 /tmp/recovery-stream.log || true'
-          docker exec spark-master /opt/spark/bin/spark-submit --master spark://spark-master:7077 /app/scripts/recovery_check.py
+          docker exec spark-master bash -lc 'tail -300 /tmp/recovery-stream.log || true'
+          exit 1
 
       - name: Capture logs on failure
         if: failure()
