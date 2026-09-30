@@ -1,6 +1,7 @@
 name: Fraud Platform CodeQL
 
 paths:
+  - .github/workflows
   - common
   - ingestion
   - processing
