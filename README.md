@@ -33,7 +33,7 @@ Business thresholds are in `config/fraud_rules.yml`, not hard-coded in the rules
 
 ## MLlib
 
-`processing/ml/train.py` trains Logistic Regression, Random Forest and GBT pipelines with a time-based validation split. The current artifact format is file-based; the MLOps phase will move tracking, versioning and promotion into MLflow Model Registry.
+`processing/ml/train.py` trains Logistic Regression, Random Forest and GBT pipelines with a time-based validation split, tracks the run in MLflow, registers all three models, and promotes the complete ensemble under one registry alias only after every member is successfully validated.
 
 
 ## Feature engineering
@@ -109,9 +109,9 @@ The endpoint reads the HBase `fraud:client_risk` serving table.
 
 Prometheus scrapes Kafka Exporter and the Spark driver metrics endpoint. Grafana is provisioned with a Fraud Platform dashboard. Airflow/HBase/Hive remain log/health monitored until dedicated exporters are introduced.
 
-## Known environment limitations
+## Local deployment profile
 
-The bundled deployment is single-host and academic: one Kafka broker, one HDFS datanode, one HBase node, SQLite Airflow metadata, plaintext internal networking, and an Airflow Docker-socket mount. Phase 1 standardizes Docker and CI on Spark 3.5.9 with Java 17 before the Iceberg/MinIO/Polaris/Trino migration.
+The bundled Docker environment is intentionally single-host and development-oriented: one Kafka broker, one HDFS datanode, one HBase node, SQLite Airflow metadata, plaintext internal networking, and an Airflow Docker-socket mount. The cloud deployment boundary is separated into Terraform + Helm so the core Spark processing code remains unchanged.
 
 ## Start
 
@@ -120,6 +120,11 @@ cd docker
 docker compose up -d --build
 docker compose --profile serving --profile warehouse --profile orchestration --profile monitoring up -d --build
 ```
+
+
+### Cloud image lifecycle
+
+The Spark application image is published to GHCR from `main` with both `latest` and an immutable `sha-<commit>` tag. Cloud deployments should use the immutable SHA tag through Helm (`--set image.immutableTag=sha-<commit>`) rather than relying on `latest`.
 
 ## Cloud deployment contract
 
