@@ -1,20 +1,58 @@
-"""Great Expectations validation for fraud platform Silver batches."""
+"""Great Expectations validation for the fraud platform Silver layer."""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import great_expectations as gx
+import yaml
 from pyspark.sql import DataFrame
 
+DEFAULT_CONTRACT = Path("config/quality/silver.yml")
 
-def validate_silver_dataframe(df: DataFrame) -> dict[str, Any]:
-    """Run the Silver data contract against a Spark DataFrame.
 
-    GX is deliberately used as a batch gate after the real-time Silver write,
-    not inside every streaming micro-batch. Low-level DQ still performs the
-    immediate quarantine decision; this contract provides an independent,
-    declarative validation boundary before downstream Gold consumption.
+def load_silver_contract(path: str | Path | None = None) -> dict[str, Any]:
+    contract_path = Path(path or DEFAULT_CONTRACT)
+    data = yaml.safe_load(contract_path.read_text(encoding="utf-8")) or {}
+    silver = data.get("quality", {}).get("silver", {})
+    if not silver:
+        raise ValueError(f"Silver quality contract is empty: {contract_path}")
+    return silver
+
+
+def build_expectations(contract: dict[str, Any]) -> list[Any]:
+    expectations = []
+
+    for column in contract.get("not_null_columns", []):
+        expectations.append(
+            gx.expectations.ExpectColumnValuesToNotBeNull(column=column)
+        )
+
+    for spec in contract.get("non_negative", []):
+        expectations.append(
+            gx.expectations.ExpectColumnValuesToBeBetween(
+                column=spec["column"],
+                min_value=spec.get("min_value", 0),
+                strict_min=spec.get("strict_min", False),
+            )
+        )
+
+    if not expectations:
+        raise ValueError("Silver quality contract produced no expectations")
+    return expectations
+
+
+def validate_silver_dataframe(
+    df: DataFrame,
+    contract_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Run the Silver data contract as an independent batch gate.
+
+    The streaming path performs lightweight Spark-native DQ. This validator
+    runs after persistence and is intentionally outside the latency-sensitive
+    micro-batch decision path.
     """
+    contract = load_silver_contract(contract_path)
     context = gx.get_context(mode="ephemeral")
     data_source = context.data_sources.add_spark(name="fraud_silver_spark")
     asset = data_source.add_dataframe_asset(name="silver_runtime_batch")
@@ -22,21 +60,8 @@ def validate_silver_dataframe(df: DataFrame) -> dict[str, Any]:
         batch_parameters={"dataframe": df}
     )
 
-    expectations = [
-        gx.expectations.ExpectColumnValuesToNotBeNull(column="transaction_id"),
-        gx.expectations.ExpectColumnValuesToNotBeNull(column="client_id"),
-        gx.expectations.ExpectColumnValuesToNotBeNull(column="event_time"),
-        gx.expectations.ExpectColumnValuesToBeBetween(
-            column="amount_usd",
-            min_value=0,
-            strict_min=False,
-        ),
-        gx.expectations.ExpectColumnValuesToNotBeNull(column="currency"),
-        gx.expectations.ExpectColumnValuesToNotBeNull(column="country_src"),
-    ]
-
     results = []
-    for expectation in expectations:
+    for expectation in build_expectations(contract):
         result = batch.validate(expectation)
         results.append(
             {
@@ -51,11 +76,15 @@ def validate_silver_dataframe(df: DataFrame) -> dict[str, Any]:
         "success": success,
         "expectations": results,
         "row_count": df.count(),
+        "contract_path": str(contract_path or DEFAULT_CONTRACT),
     }
 
 
-def assert_silver_dataframe(df: DataFrame) -> dict[str, Any]:
-    report = validate_silver_dataframe(df)
+def assert_silver_dataframe(
+    df: DataFrame,
+    contract_path: str | Path | None = None,
+) -> dict[str, Any]:
+    report = validate_silver_dataframe(df, contract_path)
     if not report["success"]:
         failed = [
             item["expectation"]
