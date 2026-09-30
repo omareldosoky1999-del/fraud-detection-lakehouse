@@ -36,3 +36,18 @@ def test_batch_token_changes_when_offset_range_changes(spark):
 def test_batch_token_fallback_is_stable_without_kafka_metadata(spark):
     df = spark.createDataFrame([(1,), (2,)], ['value'])
     assert build_batch_token(df, 11) == 'spark-11'
+
+
+
+def test_iceberg_commit_contract_is_defined():
+    source = (
+        __import__("pathlib").Path(__file__).parents[1]
+        / "processing"
+        / "streaming"
+        / "batch_commit.py"
+    ).read_text(encoding="utf-8")
+
+    assert "DEFAULT_ICEBERG_COMMIT_TABLE" in source
+    assert "is_committed_iceberg" in source
+    assert "mark_committed_iceberg" in source
+    assert "control.streaming_batch_commits" in source
