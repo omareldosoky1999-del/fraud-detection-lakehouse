@@ -1,6 +1,6 @@
 # Docker E2E Integration Test
 
-A separate GitHub Actions workflow (`.github/workflows/e2e.yml`) boots the Docker stack and validates the real Kafka -> Schema Registry -> Spark 3.0.0 -> HDFS -> HBase/Hive path.
+A separate GitHub Actions workflow (`.github/workflows/e2e.yml`) boots the Docker stack and validates the real Kafka -> Schema Registry -> Spark 3.5.9 -> HDFS -> HBase/Hive path.
 
 It also validates fraud alert delivery, serving API health, monitoring endpoints, Spark restart/replay behavior, and optional Airflow Gold execution.
 
