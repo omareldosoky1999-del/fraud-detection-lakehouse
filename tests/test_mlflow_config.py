@@ -41,3 +41,11 @@ def test_streaming_threshold_uses_registry_contract():
     ).read_text(encoding="utf-8")
     assert "from processing.ml.registry import decision_threshold" in source
     assert 'default=decision_threshold()' in source
+
+def test_ml_features_do_not_use_raw_identifier_magnitudes():
+    source = (ROOT / "processing" / "ml" / "train.py").read_text(encoding="utf-8")
+    start = source.index("NUMERIC = [")
+    block = source[start:source.index("]", start) + 1]
+    assert '"client_id"' not in block
+    assert '"card_id"' not in block
+    assert '"device_id"' not in block
