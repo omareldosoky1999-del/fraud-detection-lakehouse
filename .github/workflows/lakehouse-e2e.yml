@@ -37,10 +37,13 @@ jobs:
         run: |
           docker exec spark-master             /opt/spark/bin/spark-submit             --master spark://spark-master:7077             /app/scripts/lakehouse_smoke.py --keep
 
+      - name: Wait for Trino
+        run: bash scripts/wait_for_trino.sh
+
       - name: Trino reads the Iceberg table
         run: |
-          docker exec trino trino             --execute "SELECT count(*) AS rows FROM polaris.e2e_smoke.transactions WHERE status = 'SMOKE'"
-          docker exec trino trino             --execute "SELECT transaction_id, amount FROM polaris.e2e_smoke.transactions ORDER BY transaction_id"
+          docker exec trino trino --server http://localhost:8080 --execute "SELECT count(*) AS rows FROM polaris.e2e_smoke.transactions WHERE status = 'SMOKE'"
+          docker exec trino trino --server http://localhost:8080 --execute "SELECT transaction_id, amount FROM polaris.e2e_smoke.transactions ORDER BY transaction_id"
 
       - name: Capture logs on failure
         if: failure()
