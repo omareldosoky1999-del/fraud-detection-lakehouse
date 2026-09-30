@@ -35,8 +35,9 @@ def test_hbase_healthcheck_is_http_only():
     assert "hbase shell" not in text.split("hbase:")[1].split("hive:")[0]
 
 
-def test_overlay_shared_services_keep_profile_union():
+def test_lakehouse_and_mlops_use_isolated_object_stores():
     import importlib.util
+
     module_path = Path(__file__).parents[1] / "scripts" / "validate_stack.py"
     spec = importlib.util.spec_from_file_location("validate_stack", module_path)
     module = importlib.util.module_from_spec(spec)
@@ -47,8 +48,10 @@ def test_overlay_shared_services_keep_profile_union():
         "docker/docker-compose.mlflow.yml",
     )
 
-    assert set(services["rustfs"]["profiles"]) == {"lakehouse", "mlops"}
-    assert set(services["rustfs-init"]["profiles"]) == {"lakehouse", "mlops"}
+    assert set(services["rustfs"]["profiles"]) == {"lakehouse"}
+    assert set(services["mlflow-rustfs"]["profiles"]) == {"mlops"}
+    assert set(services["rustfs-init"]["profiles"]) == {"lakehouse"}
+    assert set(services["mlflow-rustfs-init"]["profiles"]) == {"mlops"}
 
     lineage = module._merge_services(
         "docker/docker-compose.yml",
