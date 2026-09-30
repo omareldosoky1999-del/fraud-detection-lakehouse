@@ -52,7 +52,6 @@ def _register_spark_model(
     registered_name: str,
     client: MlflowClient,
     metadata: dict,
-    promote_alias: str | None,
 ):
     mlflow.spark.log_model(
         spark_model=model,
@@ -201,7 +200,6 @@ def train(
                         "spark_version": spark.version,
                         "validation_strategy": "time_based_80_20",
                     },
-                    promote_alias=None,
                 )
                 registered_versions[logical_name] = {
                     "registered_name": registered_name,
@@ -229,8 +227,22 @@ def train(
                     member["version"],
                 )
 
+            metrics["ensemble_release"] = {
+                "run_id": run.info.run_id,
+                "alias": alias,
+                "members": registered_versions,
+                "promotion_policy": "coordinated_alias_promotion_after_full_registration",
+            }
+
+            manifest_path = out / "ensemble_manifest.json"
+            manifest_path.write_text(
+                json.dumps(metrics["ensemble_release"], indent=2),
+                encoding="utf-8",
+            )
+            mlflow.log_artifact(str(manifest_path), artifact_path="ensemble_release")
+
             print(
-                f"[MLFLOW] ensemble release promoted atomically: "
+                f"[MLFLOW] ensemble release promoted: "
                 f"alias={alias}, run_id={run.info.run_id}"
             )
 
