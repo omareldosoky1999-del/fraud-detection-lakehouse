@@ -19,8 +19,23 @@ def rollback(
     client = MlflowClient(tracking_uri=tracking_uri)
     production_name = production or production_alias(registry_config)
 
+    members = registry_members(registry_config)
+    expected_members = {
+        member["logical_name"]
+        for member in members
+    }
+    if expected_members != {
+        "logistic_regression",
+        "random_forest",
+        "gbt",
+    }:
+        raise RuntimeError(
+            "Fraud ensemble registry contract must contain exactly "
+            "logistic_regression, random_forest and gbt."
+        )
+
     target_versions = []
-    for member in registry_members(registry_config):
+    for member in members:
         name = member["registered_name"]
         versions = client.search_model_versions(f"name='{name}'")
         matches = [
