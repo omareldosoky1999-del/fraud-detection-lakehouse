@@ -142,8 +142,16 @@ services:
     depends_on:
       polaris: {condition: service_healthy}
     environment:
-      CLIENT_ID: root
-      CLIENT_SECRET: s3cr3t
+      POLARIS_URI: http://polaris:8181/api/catalog
+      POLARIS_CREDENTIAL: root:s3cr3t
+      POLARIS_SCOPE: PRINCIPAL_ROLE:ALL
+      POLARIS_TOKEN_URI: http://polaris:8181/api/catalog/v1/oauth/tokens
+      POLARIS_WAREHOUSE: fraud
+      POLARIS_REALM: POLARIS
+      S3_ENDPOINT: http://rustfs:9000
+      S3_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: rustfsadmin
+      AWS_SECRET_ACCESS_KEY: rustfsadmin
       CATALOG_NAME: fraud
     entrypoint: /bin/sh
     command:
