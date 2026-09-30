@@ -13,6 +13,35 @@ from pyspark.sql import SparkSession
 def get_spark(app_name: str, *, enable_hive: bool = True, extra_conf=None) -> SparkSession:
     builder = SparkSession.builder.appName(app_name)
 
+    if os.getenv("OPENLINEAGE_ENABLED", "false").lower() == "true":
+        builder = (
+            builder
+            .config(
+                "spark.extraListeners",
+                "io.openlineage.spark.agent.OpenLineageSparkListener",
+            )
+            .config(
+                "spark.openlineage.transport.type",
+                os.getenv("OPENLINEAGE_TRANSPORT_TYPE", "http"),
+            )
+            .config(
+                "spark.openlineage.transport.url",
+                os.getenv("OPENLINEAGE_URL", "http://marquez:5000"),
+            )
+            .config(
+                "spark.openlineage.transport.endpoint",
+                os.getenv("OPENLINEAGE_ENDPOINT", "/api/v1/lineage"),
+            )
+            .config(
+                "spark.openlineage.namespace",
+                os.getenv("OPENLINEAGE_NAMESPACE", "fraud_detection"),
+            )
+            .config(
+                "spark.openlineage.transport.timeoutInMillis",
+                os.getenv("OPENLINEAGE_TIMEOUT_MS", "5000"),
+            )
+        )
+
     if os.getenv("ICEBERG_ENABLED", "false").lower() == "true":
         catalog = os.getenv("ICEBERG_CATALOG_NAME", "polaris")
         builder = (builder
