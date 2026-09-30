@@ -52,6 +52,13 @@ jobs:
           grep -q 'sha-ci' /tmp/fraud-platform.yaml
           grep -q 'secretRef:' /tmp/fraud-platform.yaml
 
+      - name: Render Helm chart with ExternalSecret enabled
+        run: |
+          helm template fraud-platform deploy/helm/fraud-platform             -f deploy/helm/fraud-platform/values-aws.yaml             --set externalSecrets.enabled=true             --set-string image.immutableTag=sha-ci             > /tmp/fraud-platform-external-secret.yaml
+          grep -q 'kind: ExternalSecret' /tmp/fraud-platform-external-secret.yaml
+          grep -q 'fraud-platform-runtime' /tmp/fraud-platform-external-secret.yaml
+          grep -q 'ClusterSecretStore' /tmp/fraud-platform-external-secret.yaml
+
       - name: Lint Kubernetes chart
         run: helm lint deploy/helm/fraud-platform
 
