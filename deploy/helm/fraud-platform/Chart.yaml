@@ -1,0 +1,6 @@
+apiVersion: v2
+name: fraud-platform
+description: Cloud-neutral Spark fraud detection deployment for EKS, AKS and GKE
+type: application
+version: 0.1.0
+appVersion: "3.5.9"
