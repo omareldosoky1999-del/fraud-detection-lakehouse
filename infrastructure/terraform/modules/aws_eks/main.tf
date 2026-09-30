@@ -69,7 +69,6 @@ resource "aws_eks_addon" "pod_identity_agent" {
   count        = var.enable_pod_identity_agent ? 1 : 0
   cluster_name = aws_eks_cluster.this.name
   addon_name   = "eks-pod-identity-agent"
-  most_recent  = true
   depends_on   = [aws_eks_cluster.this]
 }
 resource "aws_eks_node_group" "this" {
