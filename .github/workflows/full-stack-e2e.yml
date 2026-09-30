@@ -121,6 +121,7 @@ jobs:
           python ingestion/producer/transaction_producer.py \
             --n 1500 \
             --speed 0 \
+            --start 2026-09-01T10:00:00 \
             --flush-every 100 \
             --reset \
             --checkpoint /tmp/full-stack-producer-checkpoint.json \
@@ -136,6 +137,24 @@ jobs:
           done
           docker exec spark-master bash -lc 'tail -200 /tmp/full-stack-stream.log || true'
           exit 1
+
+      - name: Build Gold aggregates and dual-write Iceberg Gold
+        run: |
+          docker exec spark-master \
+            /opt/spark/bin/spark-submit \
+            --master spark://spark-master:7077 \
+            /app/processing/batch/build_gold.py \
+            --date 2026-09-01 \
+            --lookback-days 1
+
+      - name: Verify Gold aggregates through Trino
+        run: |
+          kpis=$(docker exec trino trino --execute \
+            "SELECT total_txns FROM polaris.gold.daily_kpis WHERE event_date = DATE '2026-09-01'" \
+            --output-format CSV_HEADER=false | tr -d '\r')
+          echo "gold_daily_kpis=$kpis"
+          [ -n "$kpis" ]
+          [ "$kpis" -gt 0 ]
 
       - name: Verify semantic analytics view
         run: |
