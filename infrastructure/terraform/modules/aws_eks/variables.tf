@@ -31,3 +31,8 @@ variable "node_max" {
   type    = number
   default = 4
 }
+
+variable "enable_pod_identity_agent" {
+  type    = bool
+  default = true
+}
