@@ -44,3 +44,14 @@ def test_spark_session_does_not_ship_polaris_secret_defaults():
     ).read_text(encoding="utf-8")
     assert 'os.getenv("POLARIS_CREDENTIAL", "root:s3cr3t")' not in source
     assert 'os.environ["POLARIS_CREDENTIAL"]' in source
+
+
+def test_trino_catalog_is_environment_driven():
+    path = ROOT / "docker" / "trino" / "catalog" / "polaris.properties"
+    text = path.read_text(encoding="utf-8")
+    assert "${ENV:POLARIS_URI}" in text
+    assert "${ENV:POLARIS_CREDENTIAL}" in text
+    assert "${ENV:S3_ENDPOINT}" in text
+    assert "${ENV:AWS_ACCESS_KEY_ID}" in text
+    assert "rustfsadmin" not in text
+    assert "root:s3cr3t" not in text
