@@ -22,6 +22,7 @@ def get_spark(app_name: str, *, enable_hive: bool = True, extra_conf=None) -> Sp
                    .config(f"spark.sql.catalog.{catalog}.uri", os.getenv("POLARIS_URI", "http://polaris:8181/api/catalog"))
                    .config(f"spark.sql.catalog.{catalog}.warehouse", os.getenv("POLARIS_WAREHOUSE", "fraud"))
                    .config(f"spark.sql.catalog.{catalog}.rest.auth.type", "oauth2")
+                   .config(f"spark.sql.catalog.{catalog}.oauth2-server-uri", os.getenv("POLARIS_TOKEN_URI", "http://polaris:8181/api/catalog/v1/oauth/tokens"))
                    .config(f"spark.sql.catalog.{catalog}.credential", os.getenv("POLARIS_CREDENTIAL", "root:s3cr3t"))
                    .config(f"spark.sql.catalog.{catalog}.scope", "PRINCIPAL_ROLE:ALL")
                    .config(f"spark.sql.catalog.{catalog}.token-refresh-enabled", "true")
