@@ -13,6 +13,9 @@ def test_mlflow_overlay_is_pinned_and_wired():
     assert "mlflow-postgres" in services["mlflow"]["depends_on"]
     assert services["spark-master"]["environment"]["MLFLOW_TRACKING_URI"] == "http://mlflow:5000"
     assert services["spark-worker"]["environment"]["MLFLOW_MODEL_ALIAS"] == "production"
+    mlflow_env = services["mlflow"]["environment"]
+    assert "mlflow:5000" in mlflow_env["MLFLOW_SERVER_ALLOWED_HOSTS"]
+    assert mlflow_env["MLFLOW_SERVER_CORS_ALLOWED_ORIGINS"] == "http://localhost:*"
 
     dockerfile = ROOT / "docker" / "mlflow" / "Dockerfile"
     text = dockerfile.read_text(encoding="utf-8")
