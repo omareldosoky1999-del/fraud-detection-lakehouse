@@ -70,5 +70,5 @@ resource "aws_eks_node_group" "this" {
     max_size     = var.node_max
   }
 
-  depends_on = [for attachment in aws_iam_role_policy_attachment.worker : attachment]
+  depends_on = [aws_iam_role_policy_attachment.worker]
 }
