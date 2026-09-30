@@ -35,17 +35,30 @@ def _load_registered_models(
 
     import mlflow
     import mlflow.spark
+    from mlflow import MlflowClient
 
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_registry_uri(os.getenv("MLFLOW_REGISTRY_URI", tracking_uri))
 
     selected_alias = alias or production_alias(config_path)
     models: list[PipelineModel] = []
+    release_ids = set()
+    client = MlflowClient()
 
     for member in registry_members(config_path):
         name = member["registered_name"]
+        version = client.get_model_version_by_alias(name, selected_alias)
+        release_id = version.tags.get("ensemble_run_id")
+        if release_id:
+            release_ids.add(release_id)
         uri = f"models:/{name}@{selected_alias}"
         models.append(mlflow.spark.load_model(uri))
+
+    if len(release_ids) > 1:
+        raise RuntimeError(
+            f"MLflow ensemble alias '{selected_alias}' resolved mixed releases: "
+            f"{sorted(release_ids)}"
+        )
 
     if not models:
         raise RuntimeError(
