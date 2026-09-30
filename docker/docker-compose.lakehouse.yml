@@ -88,6 +88,25 @@ services:
     networks: [fraud-net]
     profiles: [lakehouse]
 
+  polaris-bootstrap:
+    image: apache/polaris-admin-tool:1.7.0
+    container_name: polaris-bootstrap
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      POLARIS_PERSISTENCE_TYPE: relational-jdbc
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/polaris
+      QUARKUS_DATASOURCE_USERNAME: polaris
+      QUARKUS_DATASOURCE_PASSWORD: polaris-dev-password
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        /opt/polaris/bin/polaris-admin-tool bootstrap
+        -r POLARIS
+        -c POLARIS,root,s3cr3t
+    networks: [fraud-net]
+    profiles: [lakehouse]
+
   polaris:
     image: apache/polaris:1.7.0
     container_name: polaris
@@ -95,6 +114,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       rustfs-init: {condition: service_completed_successfully}
+      polaris-bootstrap: {condition: service_completed_successfully}
     environment:
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: rustfsadmin
@@ -107,7 +127,6 @@ services:
       QUARKUS_DATASOURCE_PASSWORD: polaris-dev-password
       POLARIS_REALM_CONTEXT_REALMS: POLARIS
       QUARKUS_OTEL_SDK_DISABLED: "true"
-      POLARIS_BOOTSTRAP_CREDENTIALS: POLARIS,root,s3cr3t
       polaris.features."SUPPORTED_CATALOG_STORAGE_TYPES": '["S3"]'
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8182/q/health"]
