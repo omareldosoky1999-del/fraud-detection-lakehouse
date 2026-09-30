@@ -39,6 +39,7 @@ from processing.serving.alerts_sink import write_alerts
 from processing.serving.hbase_sink import build_connection_factory, write_partition
 from processing.streaming.batch_commit import (
     batch_path, build_batch_token, delete_path, is_committed, mark_committed,
+    is_committed_iceberg, mark_committed_iceberg,
 )
 from processing.streaming.decode import decode_transactions
 from processing.streaming.transform import dedup_batch, split_valid_invalid, to_silver
@@ -79,12 +80,21 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
                           commit_root=None,
                           hbase_host, hbase_port, kafka_bootstrap, alerts_topic,
                           history_hours=HISTORY_LOOKBACK_HOURS, ml_model_dir=None, ml_threshold=0.70,
-                          ml_required=True, iceberg_enabled=None, iceberg_catalog=None):
+                          ml_required=True, iceberg_enabled=None, iceberg_catalog=None,
+                          legacy_hdfs_enabled=None):
     commit_root = commit_root or f"{decisions_path.rstrip('/')} /_batch_commits".replace(" /", "/")
     if iceberg_enabled is None:
         iceberg_enabled = os.getenv("ICEBERG_ENABLED", "false").lower() == "true"
     if iceberg_catalog is None:
         iceberg_catalog = os.getenv("ICEBERG_CATALOG_NAME", "polaris")
+    if legacy_hdfs_enabled is None:
+        legacy_hdfs_enabled = (
+            os.getenv(
+                "LEGACY_HDFS_ENABLED",
+                "false" if iceberg_enabled else "true",
+            ).lower()
+            == "true"
+        )
     hbase_factory = build_connection_factory(hbase_host, hbase_port) if hbase_host else None
     ml_models = load_models(ml_model_dir)
     if ml_required and not ml_models:
@@ -101,33 +111,44 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
 
         batch_started = time.monotonic()
         batch_token = build_batch_token(batch_df, batch_id)
-        if is_committed(spark, commit_root, batch_token):
+        if iceberg_enabled and not legacy_hdfs_enabled:
+            if is_committed_iceberg(spark, iceberg_catalog, batch_token):
+                return
+        elif is_committed(spark, commit_root, batch_token):
             return
 
         # Re-running the same uncommitted batch clears only the legacy HDFS
         # artifacts for that batch. The Iceberg writer performs its own
         # row-level idempotent replacement before the committed marker.
-        for path in (
-            batch_path(bronze_path, batch_token),
-            batch_path(quarantine_path, batch_token),
-            batch_path(silver_path, batch_token),
-            batch_path(decisions_path, batch_token),
-        ):
-            delete_path(spark, path)
+        if legacy_hdfs_enabled:
+            for path in (
+                batch_path(bronze_path, batch_token),
+                batch_path(quarantine_path, batch_token),
+                batch_path(silver_path, batch_token),
+                batch_path(decisions_path, batch_token),
+            ):
+                delete_path(spark, path)
 
-        _write_bronze(batch_df, bronze_path=bronze_path, batch_token=batch_token)
+            _write_bronze(
+                batch_df,
+                bronze_path=bronze_path,
+                batch_token=batch_token,
+            )
         batch_df = dedup_batch(batch_df)
         valid, invalid = split_valid_invalid(batch_df)
 
         if not invalid.rdd.isEmpty():
             if fraud_quarantined_total is not None:
                 fraud_quarantined_total.inc(invalid.count())
-            (invalid
-             .withColumn("quarantine_date", F.to_date("quarantined_at"))
-             .withColumn("batch_token", F.lit(batch_token))
-             .write.mode("overwrite")
-             .partitionBy("batch_token", "quarantine_date")
-             .parquet(quarantine_path))
+            if legacy_hdfs_enabled:
+                (
+                    invalid
+                    .withColumn("quarantine_date", F.to_date("quarantined_at"))
+                    .withColumn("batch_token", F.lit(batch_token))
+                    .write.mode("overwrite")
+                    .partitionBy("batch_token", "quarantine_date")
+                    .parquet(quarantine_path)
+                )
 
         if valid.rdd.isEmpty():
             if iceberg_enabled:
@@ -140,7 +161,14 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
                     silver=None,
                     decisions=None,
                 )
-            mark_committed(spark, commit_root, batch_token)
+            if iceberg_enabled and not legacy_hdfs_enabled:
+                mark_committed_iceberg(
+                    spark,
+                    iceberg_catalog,
+                    batch_token,
+                )
+            else:
+                mark_committed(spark, commit_root, batch_token)
             return
 
         silver = to_silver(valid).withColumn("batch_token", F.lit(batch_token))
@@ -150,9 +178,12 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
             mark_committed(spark, commit_root, batch_token)
             return
 
-        (silver.write.mode("overwrite")
-         .partitionBy("batch_token", "event_date")
-         .parquet(silver_path))
+        if legacy_hdfs_enabled:
+            (
+                silver.write.mode("overwrite")
+                .partitionBy("batch_token", "event_date")
+                .parquet(silver_path)
+            )
 
         batch_transactions = silver.select("transaction_id").distinct().cache()
         touched_clients = silver.select("client_id").distinct()
@@ -166,11 +197,20 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
             return
 
         history_start = batch_min_event_time - timedelta(hours=history_hours)
-        history = (
-            spark.read.parquet(str(silver_path))
-            .filter(F.col("event_time") >= F.lit(history_start))
-            .join(touched_clients, on="client_id", how="left_semi")
-        )
+        if legacy_hdfs_enabled:
+            history = (
+                spark.read.parquet(str(silver_path))
+                .filter(F.col("event_time") >= F.lit(history_start))
+                .join(touched_clients, on="client_id", how="left_semi")
+            )
+        else:
+            history = (
+                spark.table(
+                    f"{iceberg_catalog}.{TABLES['silver']}"
+                )
+                .filter(F.col("event_time") >= F.lit(history_start))
+                .join(touched_clients, on="client_id", how="left_semi")
+            )
         combined = history.unionByName(silver, allowMissingColumns=True).dropDuplicates(["transaction_id"])
         featured_all = add_fraud_features(combined)
         feature_batch = (
@@ -190,9 +230,12 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
             .cache()
         )
 
-        (decided_batch.write.mode("overwrite")
-         .partitionBy("batch_token", "event_date")
-         .parquet(decisions_path))
+        if legacy_hdfs_enabled:
+            (
+                decided_batch.write.mode("overwrite")
+                .partitionBy("batch_token", "event_date")
+                .parquet(decisions_path)
+            )
 
         if iceberg_enabled:
             write_micro_batch(
@@ -236,7 +279,14 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
             if fraud_alerts_total is not None:
                 fraud_alerts_total.inc(alert_count)
 
-        mark_committed(spark, commit_root, batch_token)
+        if iceberg_enabled and not legacy_hdfs_enabled:
+            mark_committed_iceberg(
+                spark,
+                iceberg_catalog,
+                batch_token,
+            )
+        else:
+            mark_committed(spark, commit_root, batch_token)
         if fraud_batches_total is not None:
             fraud_batches_total.inc()
         if fraud_batch_duration_seconds is not None:
@@ -280,6 +330,7 @@ def run(args):
         ml_required=not args.rules_only,
         iceberg_enabled=not args.no_iceberg,
         iceberg_catalog=args.iceberg_catalog,
+        legacy_hdfs_enabled=args.legacy_hdfs_enabled,
     )
 
     (events.writeStream
@@ -312,6 +363,12 @@ def main(argv=None):
         help="Explicit legacy/test mode that disables the ML-required startup gate.",
     )
     ap.add_argument("--iceberg-catalog", default=os.getenv("ICEBERG_CATALOG_NAME", "polaris"))
+    ap.add_argument(
+        "--legacy-hdfs-enabled",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Keep migration-era HDFS writes/history/commit markers enabled.",
+    )
     ap.add_argument("--no-iceberg", action="store_true")
     ap.add_argument("--hbase-host", default=os.getenv("HBASE_HOST", "hbase"))
     ap.add_argument("--hbase-port", type=int, default=int(os.getenv("HBASE_THRIFT_PORT", "9090")))
