@@ -1,4 +1,3 @@
-services:
   spark-master:
     depends_on:
       mlflow: {condition: service_healthy}
@@ -6,6 +5,10 @@ services:
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MLFLOW_MODEL_CONFIG: /app/config/ml_models.yml
       MLFLOW_MODEL_ALIAS: production
+      AWS_ACCESS_KEY_ID: rustfsadmin
+      AWS_SECRET_ACCESS_KEY: rustfsadmin
+      AWS_DEFAULT_REGION: us-east-1
+      MLFLOW_S3_ENDPOINT_URL: http://mlflow-rustfs:9000
 
   spark-worker:
     depends_on:
@@ -15,9 +18,13 @@ services:
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MLFLOW_MODEL_CONFIG: /app/config/ml_models.yml
       MLFLOW_MODEL_ALIAS: production
+      AWS_ACCESS_KEY_ID: rustfsadmin
+      AWS_SECRET_ACCESS_KEY: rustfsadmin
+      AWS_DEFAULT_REGION: us-east-1
+      MLFLOW_S3_ENDPOINT_URL: http://mlflow-rustfs:9000
 
-  rustfs:
-    image: rustfs/rustfs:1.0.0-rc.6
+  mlflow-rustfs:
+    image: rustfs/mlflow-rustfs:1.0.0-rc.6
     container_name: rustfs-mlops
     command: server /data --address "0.0.0.0:9000" --console-address "0.0.0.0:9001"
     environment:
@@ -40,11 +47,11 @@ services:
     profiles: [mlops]
     restart: unless-stopped
 
-  rustfs-init:
+  mlflow-rustfs-init:
     image: amazon/aws-cli:2.36.44
-    container_name: rustfs-init-mlops
+    container_name: mlflow-rustfs-init-mlops
     depends_on:
-      rustfs: {condition: service_healthy}
+      mlflow-rustfs: {condition: service_healthy}
     environment:
       AWS_ACCESS_KEY_ID: rustfsadmin
       AWS_SECRET_ACCESS_KEY: rustfsadmin
@@ -53,9 +60,9 @@ services:
     command:
       - -c
       - >-
-        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket mlflow-artifacts >/dev/null 2>&1 ||
-        aws --endpoint-url http://rustfs:9000 s3 mb s3://mlflow-artifacts;
-        aws --endpoint-url http://rustfs:9000 s3 ls
+        aws --endpoint-url http://mlflow-rustfs:9000 s3api head-bucket --bucket mlflow-artifacts >/dev/null 2>&1 ||
+        aws --endpoint-url http://mlflow-rustfs:9000 s3 mb s3://mlflow-artifacts;
+        aws --endpoint-url http://mlflow-rustfs:9000 s3 ls
     networks: [fraud-net]
     profiles: [mlops]
 
@@ -90,7 +97,7 @@ services:
       AWS_ACCESS_KEY_ID: rustfsadmin
       AWS_SECRET_ACCESS_KEY: rustfsadmin
       AWS_DEFAULT_REGION: us-east-1
-      MLFLOW_S3_ENDPOINT_URL: http://rustfs:9000
+      MLFLOW_S3_ENDPOINT_URL: http://mlflow-rustfs:9000
       MLFLOW_S3_IGNORE_TLS: "true"
       # MLflow 3.5+ Host validation remains enabled.
       MLFLOW_SERVER_ALLOWED_HOSTS: "localhost,localhost:*,mlflow,mlflow:5000,127.0.0.1,127.0.0.1:*"
@@ -108,7 +115,7 @@ services:
       - s3://mlflow-artifacts
     depends_on:
       mlflow-postgres: {condition: service_healthy}
-      rustfs-init: {condition: service_completed_successfully}
+      mlflow-rustfs-init: {condition: service_completed_successfully}
     healthcheck:
       test:
         - CMD
