@@ -10,7 +10,9 @@ env:
 runtimeSecret:
   existingSecret: fraud-platform-runtime
 serviceAccount:
-  annotations: {}
+  annotations:
+    iam.gke.io/gcp-service-account: fraud-spark@PROJECT_ID.iam.gserviceaccount.com
+  podLabels: {}
   podLabels: {}
 
 externalSecrets:
