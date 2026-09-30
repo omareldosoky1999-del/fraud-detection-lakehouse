@@ -105,3 +105,11 @@ cd docker
 docker compose up -d --build
 docker compose --profile serving --profile warehouse --profile orchestration --profile monitoring up -d --build
 ```
+
+## Cloud deployment contract
+
+The platform keeps the fraud-processing logic cloud-agnostic. `config/storage_profiles.yml` defines the storage contract for Local/RustFS, AWS/S3, Azure/ADLS Gen2, and GCP/GCS, while Terraform owns cloud-specific infrastructure.
+
+For Kubernetes deployment, the runtime target is EKS, AKS, or GKE with Spark on Kubernetes. The Spark Operator API used by the deployment manifests is `sparkoperator.k8s.io/v1beta2`.
+
+See `docs/cloud-migration.md` and `infrastructure/terraform/README.md` for the migration boundary and infrastructure layout.
