@@ -75,7 +75,7 @@ docker exec spark-master \\
   --promote-alias production
 ```
 
-Training uses a time-based validation split and registers each validated Spark MLlib model under the configured registry name. The streaming job loads the same three members from the `production` alias when `MLFLOW_TRACKING_URI` is configured.
+Training uses a time-based validation split and registers each validated Spark MLlib model under the configured registry name. The production streaming job requires all three registered ensemble members and loads them from the `production` alias. `--rules-only` exists only as an explicit test/legacy escape hatch.
 
 ## Serving
 
