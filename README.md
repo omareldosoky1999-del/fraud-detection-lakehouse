@@ -23,7 +23,7 @@ Prometheus/Grafana <- Kafka Exporter + Spark driver metrics
 
 ## Restart and idempotency
 
-Spark checkpoints provide source progress. Each micro-batch also receives a deterministic token derived from Kafka partition/offset ranges. Bronze/Silver/quarantine/decision outputs are written with `batch_token` partitions and dynamic overwrite, and a `COMMITTED` marker is written after the sinks complete. A retry of an uncommitted batch therefore replaces only its own output. Transaction IDs are also filtered against previously committed Silver data, protecting against manual checkpoint resets.
+Spark checkpoints provide source progress. Each micro-batch also receives a deterministic token derived from Kafka partition/offset ranges. Legacy HDFS Bronze/Silver/quarantine/decision outputs use `batch_token` partitions, while Iceberg uses time-based partitions and row-level `batch_token` replacement. A `COMMITTED` marker is written after the sinks complete, so an uncommitted retry can safely replace its own logical batch without making every micro-batch a physical Iceberg partition. Transaction IDs are also filtered against previously committed Silver data, protecting against manual checkpoint resets.
 
 Kafka alert publication remains at-least-once. `alert_id = batch_token:transaction_id` lets the included SQLite-backed alert consumer de-duplicate repeated deliveries.
 
@@ -33,7 +33,7 @@ Business thresholds are in `config/fraud_rules.yml`, not hard-coded in the rules
 
 ## MLlib
 
-`processing/ml/train.py` trains Logistic Regression, Random Forest and GBT pipelines with a time-based validation split, tracks the run in MLflow, registers all three models, and promotes the complete ensemble under one registry alias only after every member is successfully validated.
+`processing/ml/train.py` trains Logistic Regression, Random Forest and GBT pipelines with a time-based validation split and class weighting, evaluates ROC-AUC/AUPRC/precision/recall/F1, tracks the run in MLflow, and registers all three models. Training defaults to the `candidate` alias; production promotion is a separate controlled operation.
 
 
 ## Feature engineering
@@ -49,7 +49,7 @@ The streaming path still performs immediate schema/data-quality checks and quara
 
 The Silver contract currently checks required identifiers/timestamps/categorical fields and prevents negative USD amounts. It is implemented in `processing/quality/gx_validation.py`, executed by `scripts/validate_silver_quality.py`, and enforced by the `fraud_gold_daily` Airflow DAG.
 
-Great Expectations 1.23.2 currently supports Spark DataFrame data sources, which is why the validator runs directly against the existing Spark DataFrame rather than converting the financial dataset to pandas. citeturn102359search0turn102359search3
+Great Expectations is integrated directly with the existing Spark DataFrame validation boundary, so the financial dataset does not need to be converted to pandas.
 ## MLOps / MLflow
 
 The fraud models are managed as a first-class MLOps lifecycle with candidate-first promotion:
