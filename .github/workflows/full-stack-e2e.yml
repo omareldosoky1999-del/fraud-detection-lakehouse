@@ -140,6 +140,10 @@ jobs:
           docker exec spark-master bash -lc 'tail -200 /tmp/full-stack-stream.log || true'
           exit 1
 
+      - name: Validate Silver with Great Expectations from Iceberg
+        run: |
+          docker exec spark-master             python3 /app/scripts/validate_silver_quality.py             --date 2026-09-01             --iceberg-catalog polaris             --iceberg-table silver.transactions             --report /app/reports/dq/full-stack-silver-validation.json
+
       - name: Build Gold aggregates and dual-write Iceberg Gold
         run: |
           docker exec spark-master \
