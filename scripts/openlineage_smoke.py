@@ -5,7 +5,7 @@ from pyspark.sql import functions as F
 
 from processing.common.spark_session import get_spark
 
-OUTPUT = "/tmp/openlineage-smoke-output"
+OUTPUT = "hdfs:///user/spark/openlineage-smoke-output"
 
 
 def main():
