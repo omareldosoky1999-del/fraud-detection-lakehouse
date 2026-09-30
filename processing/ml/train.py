@@ -1,11 +1,15 @@
-"""Train the core Spark MLlib fraud ensemble with temporal validation."""
+"""Train Spark MLlib fraud models and manage them through MLflow."""
 from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
+import mlflow
+import mlflow.spark
+from mlflow import MlflowClient
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import GBTClassifier, LogisticRegression, RandomForestClassifier
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
@@ -14,62 +18,260 @@ from pyspark.sql import functions as F
 
 from ingestion.generator.transaction_generator import generate
 from processing.common.spark_session import get_spark
+from processing.ml.registry import load_registry_config, production_alias, registry_members
 from processing.streaming.transform import to_silver
 
 CATEGORICAL = ["txn_type", "status", "currency", "country_src", "country_dest"]
 NUMERIC = ["amount_usd", "card_id", "device_id", "client_id"]
 
-def _pipeline(estimator):
-    idx = [StringIndexer(inputCol=c, outputCol=f"{c}_idx", handleInvalid="keep") for c in CATEGORICAL]
-    enc = OneHotEncoder(inputCols=[f"{c}_idx" for c in CATEGORICAL], outputCols=[f"{c}_ohe" for c in CATEGORICAL])
-    asm = VectorAssembler(inputCols=NUMERIC + [f"{c}_ohe" for c in CATEGORICAL], outputCol="features", handleInvalid="keep")
-    return Pipeline(stages=idx + [enc, asm, estimator.setFeaturesCol("features").setLabelCol("label")])
 
-def train(n: int, model_dir: str, seed: int = 42):
+def _pipeline(estimator):
+    idx = [
+        StringIndexer(inputCol=c, outputCol=f"{c}_idx", handleInvalid="keep")
+        for c in CATEGORICAL
+    ]
+    enc = OneHotEncoder(
+        inputCols=[f"{c}_idx" for c in CATEGORICAL],
+        outputCols=[f"{c}_ohe" for c in CATEGORICAL],
+    )
+    asm = VectorAssembler(
+        inputCols=NUMERIC + [f"{c}_ohe" for c in CATEGORICAL],
+        outputCol="features",
+        handleInvalid="keep",
+    )
+    return Pipeline(
+        stages=idx + [enc, asm, estimator.setFeaturesCol("features").setLabelCol("label")]
+    )
+
+
+def _register_spark_model(
+    *,
+    model,
+    run_id: str,
+    artifact_path: str,
+    registered_name: str,
+    client: MlflowClient,
+    metadata: dict,
+    promote_alias: str | None,
+):
+    mlflow.spark.log_model(
+        spark_model=model,
+        artifact_path=artifact_path,
+        registered_model_name=registered_name,
+    )
+
+    versions = client.search_model_versions(f"name='{registered_name}'")
+    candidates = [v for v in versions if v.run_id == run_id]
+    if not candidates:
+        raise RuntimeError(
+            f"MLflow did not expose a registered version for {registered_name} "
+            f"from run {run_id}"
+        )
+    version = max(candidates, key=lambda v: int(v.version))
+
+    for key, value in metadata.items():
+        client.set_model_version_tag(
+            name=registered_name,
+            version=version.version,
+            key=key,
+            value=str(value),
+        )
+
+    if promote_alias:
+        client.set_registered_model_alias(
+            registered_name,
+            promote_alias,
+            version.version,
+        )
+
+    return version.version
+
+
+def train(
+    n: int,
+    model_dir: str,
+    seed: int = 42,
+    tracking_uri: str | None = None,
+    experiment: str = "fraud-detection/spark-ml-ensemble",
+    registry_config: str = "config/ml_models.yml",
+    promote_alias: str | None = None,
+):
+    tracking_uri = tracking_uri or os.getenv("MLFLOW_TRACKING_URI")
+    if not tracking_uri:
+        raise RuntimeError(
+            "MLFLOW_TRACKING_URI is required. "
+            "Use an explicit local/offline mode only for isolated development."
+        )
+
+    os.environ["MLFLOW_TRACKING_URI"] = tracking_uri
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_registry_uri(tracking_uri)
+    mlflow.set_experiment(experiment)
+
+    registry = load_registry_config(registry_config)
+    alias = promote_alias or os.getenv("MLFLOW_PROMOTE_ALIAS", registry.get("alias", "production"))
+    members = {m["logical_name"]: m["registered_name"] for m in registry_members(registry_config)}
+
     spark = get_spark("fraud-ml-train", enable_hive=False)
     try:
-        events = generate(n, seed=seed, start=datetime(2026, 9, 1), data_dir="ingestion/data")
-        raw = spark.createDataFrame([{**e.rec, "label": float(e.is_fraud)} for e in events])
+        events = generate(
+            n,
+            seed=seed,
+            start=datetime(2026, 9, 1),
+            data_dir="ingestion/data",
+        )
+        raw = spark.createDataFrame(
+            [{**e.rec, "label": float(e.is_fraud)} for e in events]
+        )
         silver = to_silver(raw).withColumn("label", F.col("label").cast("double"))
 
-        cutoff = silver.select(F.expr("percentile_approx(event_time, 0.8)").alias("cutoff")).first()["cutoff"]
-        if cutoff is None: raise ValueError("Unable to derive time-based validation cutoff")
+        cutoff = (
+            silver.select(
+                F.expr("percentile_approx(event_time, 0.8)").alias("cutoff")
+            )
+            .first()["cutoff"]
+        )
+        if cutoff is None:
+            raise ValueError("Unable to derive time-based validation cutoff")
+
         train_df = silver.filter(F.col("event_time") < F.lit(cutoff)).cache()
         validation_df = silver.filter(F.col("event_time") >= F.lit(cutoff)).cache()
         train_count = train_df.count()
         validation_count = validation_df.count()
         if train_count == 0 or validation_count == 0:
-            raise ValueError(f"Invalid temporal split: train={train_count}, validation={validation_count}")
+            raise ValueError(
+                f"Invalid temporal split: train={train_count}, validation={validation_count}"
+            )
 
         out = Path(model_dir)
         out.mkdir(parents=True, exist_ok=True)
-        evaluator = BinaryClassificationEvaluator(labelCol="label", rawPredictionCol="rawPrediction", metricName="areaUnderROC")
+
+        evaluator = BinaryClassificationEvaluator(
+            labelCol="label",
+            rawPredictionCol="rawPrediction",
+            metricName="areaUnderROC",
+        )
         estimators = {
             "logistic_regression": LogisticRegression(maxIter=50, regParam=0.05),
-            "random_forest": RandomForestClassifier(numTrees=80, maxDepth=10, seed=seed),
+            "random_forest": RandomForestClassifier(
+                numTrees=80, maxDepth=10, seed=seed
+            ),
             "gbt": GBTClassifier(maxIter=60, maxDepth=5, seed=seed),
         }
-        metrics = {"spark_version": spark.version, "cutoff": str(cutoff), "train_rows": train_count, "validation_rows": validation_count}
 
-        for name, estimator in estimators.items():
-            model = _pipeline(estimator).fit(train_df)
-            predictions = model.transform(validation_df)
-            auc = evaluator.evaluate(predictions)
-            model.write().overwrite().save(str(out / name))
-            metrics[name] = {"validation_auc": float(auc)}
-            print(f"[ML] {name}: validation_auc={auc:.4f}")
+        metrics = {
+            "spark_version": spark.version,
+            "mlflow_version": mlflow.__version__,
+            "cutoff": str(cutoff),
+            "train_rows": train_count,
+            "validation_rows": validation_count,
+            "validation_strategy": "time_based_80_20",
+        }
 
-        (out / "training_metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+        client = MlflowClient()
+        with mlflow.start_run(run_name=f"fraud-ensemble-{seed}") as run:
+            mlflow.log_params(
+                {
+                    "seed": seed,
+                    "events": n,
+                    "train_rows": train_count,
+                    "validation_rows": validation_count,
+                    "validation_strategy": "time_based_80_20",
+                    "spark_version": spark.version,
+                }
+            )
+
+            for logical_name, estimator in estimators.items():
+                model = _pipeline(estimator).fit(train_df)
+                predictions = model.transform(validation_df)
+                auc = float(evaluator.evaluate(predictions))
+
+                model.write().overwrite().save(str(out / logical_name))
+
+                registered_name = members[logical_name]
+                mlflow.log_metric(f"{logical_name}_validation_auc", auc)
+
+                version = _register_spark_model(
+                    model=model,
+                    run_id=run.info.run_id,
+                    artifact_path=f"model_{logical_name}",
+                    registered_name=registered_name,
+                    client=client,
+                    metadata={
+                        "validation_status": "PASSED",
+                        "validation_auc": auc,
+                        "ensemble_member": "true",
+                        "spark_version": spark.version,
+                        "validation_strategy": "time_based_80_20",
+                    },
+                    promote_alias=alias,
+                )
+
+                metrics[logical_name] = {
+                    "validation_auc": auc,
+                    "registered_name": registered_name,
+                    "registry_version": str(version),
+                    "production_alias": alias,
+                }
+
+                print(
+                    f"[MLFLOW] {logical_name}: auc={auc:.4f}, "
+                    f"registered={registered_name}@{version}, alias={alias}"
+                )
+
+            metrics_path = out / "training_metrics.json"
+            metrics_path.write_text(
+                json.dumps(metrics, indent=2),
+                encoding="utf-8",
+            )
+            mlflow.log_artifact(str(metrics_path), artifact_path="training_metadata")
+            mlflow.set_tags(
+                {
+                    "pipeline": "fraud_detection",
+                    "model_family": "spark_mllib_ensemble",
+                    "registry_alias": alias,
+                    "training_status": "completed",
+                }
+            )
+
+            print(f"[MLFLOW] run_id={run.info.run_id}")
+
     finally:
+        train_df.unpersist()
+        validation_df.unpersist()
         spark.stop()
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--n", type=int, default=20000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--model-dir", default="models/fraud_ensemble")
+    parser.add_argument("--tracking-uri", default=os.getenv("MLFLOW_TRACKING_URI"))
+    parser.add_argument(
+        "--experiment",
+        default="fraud-detection/spark-ml-ensemble",
+    )
+    parser.add_argument(
+        "--registry-config",
+        default=os.getenv("MLFLOW_MODEL_CONFIG", "config/ml_models.yml"),
+    )
+    parser.add_argument(
+        "--promote-alias",
+        default=os.getenv("MLFLOW_PROMOTE_ALIAS"),
+        help="Alias assigned to each successfully validated ensemble member.",
+    )
     args = parser.parse_args(argv)
-    train(args.n, args.model_dir, args.seed)
+    train(
+        args.n,
+        args.model_dir,
+        args.seed,
+        tracking_uri=args.tracking_uri,
+        experiment=args.experiment,
+        registry_config=args.registry_config,
+        promote_alias=args.promote_alias,
+    )
+
 
 if __name__ == "__main__":
     main()
