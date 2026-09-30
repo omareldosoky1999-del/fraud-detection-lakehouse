@@ -25,10 +25,16 @@ def train(n,model_dir,seed=42):
         events=generate(n,seed=seed,start=datetime(2026,9,1),data_dir="ingestion/data")
         raw=spark.createDataFrame([{**e.rec,"label":float(e.is_fraud)} for e in events])
         silver=to_silver(raw).withColumn("label",F.col("label").cast("double"))
-        train_df,_=silver.randomSplit([0.8,0.2],seed=seed)
+        cutoff = silver.select(F.expr("percentile_approx(event_time, 0.8)").alias("cutoff")).first()["cutoff"]
+        if cutoff is None:
+            raise ValueError("Unable to derive time-based validation cutoff")
+        train_df = silver.filter(F.col("event_time") < F.lit(cutoff))
+        validation_df = silver.filter(F.col("event_time") >= F.lit(cutoff))
+        if train_df.rdd.isEmpty() or validation_df.rdd.isEmpty():
+            raise ValueError("Time-based split produced an empty train or validation set")
         out=Path(model_dir); out.mkdir(parents=True,exist_ok=True)
         models={"logistic_regression":LogisticRegression(maxIter=50,regParam=0.05),"random_forest":RandomForestClassifier(numTrees=80,maxDepth=10,seed=seed),"gbt":GBTClassifier(maxIter=60,maxDepth=5,seed=seed)}
-        for name,est in models.items():
+        for name, est in models.items():
             _pipeline(est).fit(train_df).write().overwrite().save(str(out/name))
     finally:
         spark.stop()
