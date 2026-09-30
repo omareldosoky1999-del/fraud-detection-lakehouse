@@ -1,0 +1,9 @@
+environment:
+  name: aws
+  namespace: fraud-platform
+
+env:
+  ICEBERG_FILEIO_IMPL: org.apache.iceberg.aws.s3.S3FileIO
+  POLARIS_URI: https://polaris.example.internal/api/catalog
+  MLFLOW_TRACKING_URI: https://mlflow.example.internal
+  OPENLINEAGE_URL: https://marquez.example.internal
