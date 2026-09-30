@@ -21,3 +21,7 @@ output "gke_cluster_name" {
 output "gke_workload_pool" {
   value = var.enable_gke ? module.gke[0].workload_pool : null
 }
+
+output "workload_identity_service_account_email" {
+  value = var.enable_gke ? module.workload_identity[0].email : null
+}
