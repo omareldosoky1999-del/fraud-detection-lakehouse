@@ -103,9 +103,9 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
         if is_committed(spark, commit_root, batch_token):
             return
 
-        # Re-running the same uncommitted batch replaces only its own output
-        # partitions. This closes the common "crash after Silver, before alert"
-        # gap without deleting any other batch.
+        # Re-running the same uncommitted batch clears only the legacy HDFS
+        # artifacts for that batch. The Iceberg writer performs its own
+        # row-level idempotent replacement before the committed marker.
         for path in (
             batch_path(bronze_path, batch_token),
             batch_path(quarantine_path, batch_token),
@@ -153,23 +153,27 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
          .partitionBy("batch_token", "event_date")
          .parquet(silver_path))
 
-        batch_ids = [r.transaction_id for r in silver.select("transaction_id").collect()]
-        touched_clients = [r.client_id for r in silver.select("client_id").distinct().collect()]
-        batch_min_event_time = silver.agg(F.min("event_time").alias("min_event_time")).first()["min_event_time"]
+        batch_transactions = silver.select("transaction_id").distinct().cache()
+        touched_clients = silver.select("client_id").distinct()
+        batch_min_event_time = silver.agg(
+            F.min("event_time").alias("min_event_time")
+        ).first()["min_event_time"]
         if batch_min_event_time is None:
             silver.unpersist()
             mark_committed(spark, commit_root, batch_token)
             return
 
         history_start = batch_min_event_time - timedelta(hours=history_hours)
-        history = (spark.read.parquet(str(silver_path))
-                   .filter(F.col("client_id").isin(touched_clients))
-                   .filter(F.col("event_time") >= F.lit(history_start)))
+        history = (
+            spark.read.parquet(str(silver_path))
+            .filter(F.col("event_time") >= F.lit(history_start))
+            .join(touched_clients, on="client_id", how="left_semi")
+        )
         combined = history.unionByName(silver, allowMissingColumns=True).dropDuplicates(["transaction_id"])
         featured_all = add_fraud_features(combined)
         feature_batch = (
             featured_all
-            .filter(F.col("transaction_id").isin(batch_ids))
+            .join(batch_transactions, on="transaction_id", how="inner")
             .withColumn("batch_token", F.lit(batch_token))
             .cache()
         )
@@ -177,10 +181,12 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
         decided_all = apply_rules(featured_all)
         if ml_models:
             decided_all = apply_ml_ensemble(decided_all, ml_models, threshold=ml_threshold)
-        decided_batch = (decided_all
-                         .filter(F.col("transaction_id").isin(batch_ids))
-                         .withColumn("batch_token", F.lit(batch_token))
-                         .cache())
+        decided_batch = (
+            decided_all
+            .join(batch_transactions, on="transaction_id", how="inner")
+            .withColumn("batch_token", F.lit(batch_token))
+            .cache()
+        )
 
         (decided_batch.write.mode("overwrite")
          .partitionBy("batch_token", "event_date")
@@ -236,6 +242,7 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
         silver.unpersist()
         feature_batch.unpersist()
         decided_batch.unpersist()
+        batch_transactions.unpersist()
 
     return process_batch
 
