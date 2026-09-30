@@ -30,7 +30,7 @@ jobs:
         run: |
           docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             --profile lakehouse ps
 
-      - name: Spark -> Polaris -> MinIO smoke test
+      - name: Spark -> Polaris -> RustFS smoke test
         run: |
           docker exec spark-master             /opt/spark/bin/spark-submit             --master spark://spark-master:7077             /app/scripts/lakehouse_smoke.py --keep
 
