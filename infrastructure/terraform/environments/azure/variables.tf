@@ -67,3 +67,13 @@ variable "aks_vm_size" {
   type    = string
   default = "Standard_D4s_v5"
 }
+
+variable "workload_namespace" {
+  type    = string
+  default = "fraud-platform"
+}
+
+variable "workload_service_account" {
+  type    = string
+  default = "fraud-spark"
+}
