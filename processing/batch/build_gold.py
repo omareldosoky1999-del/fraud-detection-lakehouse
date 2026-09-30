@@ -12,6 +12,7 @@ from decimal import Decimal
 from pyspark.sql import DataFrame, functions as F
 
 from processing.common.spark_session import get_spark
+from processing.lakehouse.iceberg_tables import write_gold_tables
 
 
 def build_customer_daily_risk(decisions_for_day: DataFrame) -> DataFrame:
@@ -43,7 +44,15 @@ def build_daily_kpis(decisions_for_day: DataFrame) -> DataFrame:
     )
 
 
-def run(decisions_path: str, gold_customer_path: str, gold_kpis_path: str, run_date: date, lookback_days: int = 2):
+def run(
+    decisions_path: str,
+    gold_customer_path: str,
+    gold_kpis_path: str,
+    run_date: date,
+    lookback_days: int = 2,
+):
+    iceberg_enabled = os.getenv("ICEBERG_ENABLED", "false").lower() == "true"
+    iceberg_catalog = os.getenv("ICEBERG_CATALOG_NAME", "polaris")
     spark = get_spark("fraud-gold-batch", enable_hive=False)
     all_days = spark.read.parquet(decisions_path)
     for offset in range(max(1, lookback_days)):
@@ -52,8 +61,27 @@ def run(decisions_path: str, gold_customer_path: str, gold_kpis_path: str, run_d
         event_date = F.lit(target_date).cast("date")
         customer_risk = build_customer_daily_risk(day_df).withColumn("event_date", event_date)
         kpis = build_daily_kpis(day_df).withColumn("event_date", event_date)
-        (customer_risk.write.mode("overwrite").option("partitionOverwriteMode","dynamic").partitionBy("event_date").parquet(gold_customer_path))
-        (kpis.write.mode("overwrite").option("partitionOverwriteMode","dynamic").partitionBy("event_date").parquet(gold_kpis_path))
+        (
+            customer_risk.write
+            .mode("overwrite")
+            .option("partitionOverwriteMode", "dynamic")
+            .partitionBy("event_date")
+            .parquet(gold_customer_path)
+        )
+        (
+            kpis.write
+            .mode("overwrite")
+            .option("partitionOverwriteMode", "dynamic")
+            .partitionBy("event_date")
+            .parquet(gold_kpis_path)
+        )
+        if iceberg_enabled:
+            write_gold_tables(
+                spark,
+                catalog=iceberg_catalog,
+                customer_daily_risk=customer_risk,
+                daily_kpis=kpis,
+            )
         print(f"[build_gold] {target_date}: {day_df.count()} decisions -> {customer_risk.count()} clients, KPIs written")
     spark.stop()
 
