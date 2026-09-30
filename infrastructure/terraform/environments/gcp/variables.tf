@@ -13,6 +13,21 @@ variable "bucket_name" {
   description = "Globally unique GCS bucket name."
 }
 
+variable "create_network" {
+  type    = bool
+  default = false
+}
+
+variable "gke_network_name" {
+  type    = string
+  default = "fraud-detection-vpc"
+}
+
+variable "gke_subnet_cidr" {
+  type    = string
+  default = "10.40.0.0/20"
+}
+
 variable "enable_gke" {
   type    = bool
   default = false

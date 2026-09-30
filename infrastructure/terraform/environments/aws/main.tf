@@ -11,6 +11,24 @@ module "object_storage" {
   }
 }
 
+module "network" {
+  count = var.create_network ? 1 : 0
+
+  source = "../../modules/aws_vpc"
+
+  name                  = var.vpc_name
+  cidr_block            = var.vpc_cidr
+  availability_zones    = var.availability_zones
+  public_subnet_cidrs   = var.public_subnet_cidrs
+  private_subnet_cidrs  = var.private_subnet_cidrs
+  cluster_name          = var.eks_cluster_name
+  single_nat_gateway    = var.single_nat_gateway
+}
+
+locals {
+  eks_subnet_ids = var.create_network ? module.network[0].private_subnet_ids : var.eks_subnet_ids
+}
+
 module "eks" {
   count = var.enable_eks ? 1 : 0
 
@@ -18,7 +36,7 @@ module "eks" {
 
   cluster_name        = var.eks_cluster_name
   kubernetes_version  = var.eks_kubernetes_version
-  subnet_ids          = var.eks_subnet_ids
+  subnet_ids          = local.eks_subnet_ids
   node_instance_types = var.eks_node_instance_types
   node_min            = var.eks_node_min
   node_desired        = var.eks_node_desired

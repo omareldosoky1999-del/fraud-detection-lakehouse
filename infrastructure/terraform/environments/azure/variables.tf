@@ -18,6 +18,26 @@ variable "container_name" {
   default = "iceberg"
 }
 
+variable "create_network" {
+  type    = bool
+  default = false
+}
+
+variable "vnet_name" {
+  type    = string
+  default = "fraud-detection-vnet"
+}
+
+variable "vnet_address_space" {
+  type    = list(string)
+  default = ["10.30.0.0/16"]
+}
+
+variable "aks_subnet_address_prefix" {
+  type    = string
+  default = "10.30.1.0/24"
+}
+
 variable "enable_aks" {
   type    = bool
   default = false

@@ -25,3 +25,11 @@ def test_no_terraform_state_is_tracked_by_ignore_rules():
     gitignore = (ROOT.parents[1] / ".gitignore").read_text(encoding="utf-8")
     assert "*.tfstate" in gitignore
     assert ".terraform/" in gitignore
+
+
+def test_cloud_network_modules_exist():
+    for module in ["aws_vpc", "aws_eks", "azure_vnet", "azure_aks", "gcp_vpc", "gcp_gke"]:
+        path = ROOT / "modules" / module
+        assert (path / "main.tf").exists()
+        assert (path / "variables.tf").exists()
+        assert (path / "outputs.tf").exists()
