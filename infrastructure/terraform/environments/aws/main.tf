@@ -41,3 +41,16 @@ module "eks" {
   node_desired        = var.eks_node_desired
   node_max            = var.eks_node_max
 }
+module "workload_identity" {
+  count = var.enable_eks ? 1 : 0
+
+  source = "../../modules/aws_workload_identity"
+
+  name            = "${var.eks_cluster_name}-fraud-spark"
+  cluster_name    = var.eks_cluster_name
+  namespace       = var.workload_namespace
+  service_account = var.workload_service_account
+  bucket_arn      = module.object_storage.bucket_arn
+
+  depends_on = [module.eks]
+}
