@@ -1,14 +1,29 @@
-variable "project_id" {
-  type        = string
-  description = "GCP project ID."
+variable "enable_gke" {
+  type    = bool
+  default = false
 }
 
-variable "region" {
+variable "gke_name" {
   type    = string
-  default = "europe-west1"
+  default = "fraud-detection-gke"
 }
 
-variable "bucket_name" {
-  type        = string
-  description = "Globally unique GCS bucket name."
+variable "gke_network" {
+  type    = string
+  default = ""
+}
+
+variable "gke_subnetwork" {
+  type    = string
+  default = ""
+}
+
+variable "gke_node_count" {
+  type    = number
+  default = 2
+}
+
+variable "gke_machine_type" {
+  type    = string
+  default = "e2-standard-4"
 }
