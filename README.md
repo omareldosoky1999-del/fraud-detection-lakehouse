@@ -126,7 +126,7 @@ docker compose --profile serving --profile warehouse --profile orchestration --p
 
 ### Cloud image lifecycle
 
-The Spark application image is published to GHCR from `main` with both `latest` and an immutable `sha-<commit>` tag. Cloud deployments should use the immutable SHA tag through Helm (`--set image.immutableTag=sha-<commit>`) rather than relying on `latest`.
+The Spark application image is published to GHCR with an immutable commit tag for controlled releases. Cloud deployment uses that immutable tag through Helm (`--set image.immutableTag=<commit-tag>`) and rejects `latest` at render time.
 
 ## Cloud deployment contract
 
