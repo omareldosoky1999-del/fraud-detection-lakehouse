@@ -1,7 +1,8 @@
 # MLflow Model Registry contract for the fraud decision engine.
 # Every member is trained with Spark MLlib and promoted under the same alias.
 registry:
-  alias: production
+  candidate_alias: candidate
+  production_alias: production
   min_validation_auc: 0.65
   decision_threshold: 0.70
   members:
