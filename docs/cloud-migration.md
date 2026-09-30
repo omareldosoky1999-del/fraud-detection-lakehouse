@@ -38,3 +38,10 @@ The Spark runtime is packaged as a dedicated application image and published to 
 The cloud value files reference a pre-created Kubernetes Secret named `fraud-platform-runtime`. The Secret is intentionally not rendered by this repository. At minimum it should provide the `POLARIS_CREDENTIAL` required by the Iceberg REST catalog; provider-specific cloud credentials should be supplied through workload identity or managed identity rather than static access keys whenever the cloud platform supports it. Spark Operator supports both `envFrom` and secret-backed environment variables in the `v1beta2` SparkApplication API. citeturn255934search0
 
 A manual GitHub Actions workflow, `.github/workflows/deploy-helm.yml`, deploys the selected AWS/Azure/GCP values with Helm `--atomic` and requires an operator-provided `KUBE_CONFIG_DATA` secret. The workflow is deliberately manual so applying cloud infrastructure remains an explicit operator action.
+
+
+## Trino cloud boundary
+
+The Trino Iceberg catalog is configured entirely through environment variables. Local Docker maps those variables to Polaris, RustFS and development credentials. Cloud deployments inject the same variables through Kubernetes Secrets and cloud-native identity.
+
+The Trino SQL semantic layer therefore stays unchanged across local and cloud environments; only the catalog endpoint, token endpoint, warehouse and object-store access mechanism change.
