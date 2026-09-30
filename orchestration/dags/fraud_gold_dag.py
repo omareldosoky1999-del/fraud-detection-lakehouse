@@ -90,7 +90,9 @@ with DAG(
             f"{APP_DIR}/scripts/validate_silver_quality.py "
             "--date {{{{ ds }}}} "
             "--path hdfs://namenode:8020/warehouse/silver/transactions "
-            f"--report {APP_DIR}/reports/dq/silver_validation_{{{{ ds }}}}.json"
+            f"--report /tmp/silver_validation_{{{{ ds }}}}.json && "
+            "docker exec spark-master hdfs dfs -mkdir -p /warehouse/quality_reports && "
+            "docker exec spark-master hdfs dfs -put -f /tmp/silver_validation_{{{{ ds }}}}.json /warehouse/quality_reports/"
         ),
     )
 
