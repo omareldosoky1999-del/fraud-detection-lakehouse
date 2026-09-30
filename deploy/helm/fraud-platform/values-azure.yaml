@@ -16,6 +16,8 @@ serviceAccount:
   annotations: {}
   podLabels:
     azure.workload.identity/use: "true"
+  cloudIdentity:
+    azureClientId: ""
 
 externalSecrets:
   enabled: false
