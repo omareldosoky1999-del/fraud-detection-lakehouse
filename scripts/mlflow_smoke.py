@@ -43,6 +43,7 @@ def main():
             spark_model=model,
             artifact_path="spark_model",
             registered_model_name=MODEL_NAME,
+            dfs_tmpdir="/tmp/mlflow-spark-tmp",
         )
 
         client = MlflowClient()
