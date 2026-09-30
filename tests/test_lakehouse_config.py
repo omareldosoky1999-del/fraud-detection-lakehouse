@@ -10,6 +10,7 @@ def test_lakehouse_overlay_is_pinned_and_wired():
     assert services["rustfs"]["image"] == "rustfs/rustfs:1.0.0-rc.6"
     assert services["polaris"]["image"] == "apache/polaris:1.7.0"
     assert services["trino"]["image"] == "trinodb/trino:483"
+    assert services["trino"]["healthcheck"]["test"] == ["CMD", "curl", "-fsS", "http://localhost:8080/v1/info"]
     catalog = ROOT / "docker" / "trino" / "catalog" / "polaris.properties"
     text = catalog.read_text(encoding="utf-8")
     assert "iceberg.catalog.type=rest" in text
