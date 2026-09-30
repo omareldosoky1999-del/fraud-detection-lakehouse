@@ -9,11 +9,14 @@ def test_mlflow_overlay_is_pinned_and_wired():
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     services = data["services"]
 
+    assert services["rustfs"]["image"] == "rustfs/rustfs:1.0.0-rc.6"
+    assert services["rustfs-init"]["profiles"] == ["mlops"]
     assert services["mlflow"]["build"]["args"]["MLFLOW_VERSION"] == "3.16.0"
     assert "mlflow-postgres" in services["mlflow"]["depends_on"]
     assert services["spark-master"]["environment"]["MLFLOW_TRACKING_URI"] == "http://mlflow:5000"
     assert services["spark-worker"]["environment"]["MLFLOW_MODEL_ALIAS"] == "production"
     mlflow_env = services["mlflow"]["environment"]
+    assert services["mlflow"]["depends_on"]["rustfs-init"]["condition"] == "service_completed_successfully"
     assert "mlflow:5000" in mlflow_env["MLFLOW_SERVER_ALLOWED_HOSTS"]
     assert mlflow_env["MLFLOW_SERVER_CORS_ALLOWED_ORIGINS"] == "http://localhost:*"
 
