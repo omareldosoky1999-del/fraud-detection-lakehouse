@@ -1,0 +1,67 @@
+services:
+  mlflow-postgres:
+    image: postgres:16.15-alpine3.23
+    container_name: mlflow-postgres
+    environment:
+      POSTGRES_DB: mlflow
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow-dev-password
+    volumes:
+      - mlflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow -d mlflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [fraud-net]
+    profiles: [mlops]
+    restart: unless-stopped
+
+  mlflow:
+    build:
+      context: ./mlflow
+      args:
+        MLFLOW_VERSION: "3.16.0"
+    container_name: mlflow
+    ports: ["5000:5000"]
+    environment:
+      MLFLOW_HOST: 0.0.0.0
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      AWS_ACCESS_KEY_ID: rustfsadmin
+      AWS_SECRET_ACCESS_KEY: rustfsadmin
+      AWS_DEFAULT_REGION: us-east-1
+      MLFLOW_S3_ENDPOINT_URL: http://rustfs:9000
+      MLFLOW_S3_IGNORE_TLS: "true"
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --backend-store-uri
+      - postgresql://mlflow:mlflow-dev-password@mlflow-postgres:5432/mlflow
+      - --artifacts-destination
+      - s3://mlflow-artifacts
+    depends_on:
+      mlflow-postgres: {condition: service_healthy}
+      rustfs-init: {condition: service_completed_successfully}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    volumes:
+      - mlflow_data:/mlflow
+    networks: [fraud-net]
+    profiles: [mlops]
+    restart: unless-stopped
+
+volumes:
+  mlflow_postgres_data:
+  mlflow_data:
