@@ -25,3 +25,5 @@ mlops:
 
 lineage:
   backend: "marquez"
+  openlineage: "1.53.0"
+  marquez: "0.51.1"
