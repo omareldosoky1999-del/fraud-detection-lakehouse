@@ -28,3 +28,8 @@ lineage:
   openlineage: "1.53.0"
   marquez: "0.51.1"
   airflow_provider: "1.14.0"
+
+quality:
+  framework: "great_expectations"
+  great_expectations: "1.23.2"
+  validation_stage: silver_to_gold
