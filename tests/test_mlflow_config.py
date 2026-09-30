@@ -50,3 +50,8 @@ def test_ml_features_do_not_use_raw_identifier_magnitudes():
     assert '"client_id"' not in block
     assert '"card_id"' not in block
     assert '"device_id"' not in block
+
+
+def test_training_contract_rejects_direct_production_promotion():
+    text = (ROOT / "processing" / "ml" / "train.py").read_text(encoding="utf-8")
+    assert "Training cannot promote directly to the production alias" in text
