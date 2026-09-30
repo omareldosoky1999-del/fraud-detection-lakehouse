@@ -13,3 +13,13 @@ serviceAccount:
   annotations: {}
   podLabels:
     azure.workload.identity/use: "true"
+
+externalSecrets:
+  enabled: false
+  secretStoreRef:
+    name: fraud-platform-azure-secrets
+    kind: ClusterSecretStore
+  targetName: fraud-platform-runtime
+  refreshInterval: 1h
+  data:
+    POLARIS_CREDENTIAL: polaris-credential
