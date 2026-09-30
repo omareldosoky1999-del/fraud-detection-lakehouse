@@ -11,5 +11,5 @@ output "container_name" {
 }
 
 output "container_id" {
-  value = azurerm_storage_container.this.resource_manager_id
+  value = azurerm_storage_container.this.id
 }
