@@ -49,7 +49,7 @@ def make_processor(spark, warehouse):
         spark, bronze_path=str(warehouse["bronze"]), silver_path=str(warehouse["silver"]),
         quarantine_path=str(warehouse["quarantine"]), decisions_path=str(warehouse["decisions"]),
         commit_root=str(warehouse["commits"]), hbase_host=None, hbase_port=None,
-        kafka_bootstrap=None, alerts_topic=None,
+        kafka_bootstrap=None, alerts_topic=None, ml_required=False,
     )
 
 
