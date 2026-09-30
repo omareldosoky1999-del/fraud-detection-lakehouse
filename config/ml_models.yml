@@ -3,6 +3,7 @@
 registry:
   alias: production
   min_validation_auc: 0.65
+  decision_threshold: 0.70
   members:
     - logical_name: logistic_regression
       registered_name: fraud_logistic_regression
