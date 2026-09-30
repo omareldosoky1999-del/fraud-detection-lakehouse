@@ -27,6 +27,9 @@ spec:
     labels:
       app.kubernetes.io/name: fraud-platform
       app.kubernetes.io/component: spark-driver
+{{- range $key, $value := .Values.serviceAccount.podLabels }}
+      {{ $key }}: {{ $value | quote }}
+{{- end }}
   executor:
     instances: {{ .Values.spark.executor.instances }}
     cores: {{ .Values.spark.executor.cores }}
@@ -34,6 +37,9 @@ spec:
     labels:
       app.kubernetes.io/name: fraud-platform
       app.kubernetes.io/component: spark-executor
+{{- range $key, $value := .Values.serviceAccount.podLabels }}
+      {{ $key }}: {{ $value | quote }}
+{{- end }}
   envVars:
 {{- range $key, $value := .Values.env }}
     {{ $key }}: {{ $value | quote }}
