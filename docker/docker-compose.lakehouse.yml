@@ -153,6 +153,8 @@ services:
       AWS_ACCESS_KEY_ID: rustfsadmin
       AWS_SECRET_ACCESS_KEY: rustfsadmin
       CATALOG_NAME: fraud
+      CLIENT_ID: root
+      CLIENT_SECRET: s3cr3t
     entrypoint: /bin/sh
     command:
       - -c
