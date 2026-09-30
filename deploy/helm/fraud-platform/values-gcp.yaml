@@ -12,3 +12,13 @@ runtimeSecret:
 serviceAccount:
   annotations: {}
   podLabels: {}
+
+externalSecrets:
+  enabled: false
+  secretStoreRef:
+    name: fraud-platform-gcp-secrets
+    kind: ClusterSecretStore
+  targetName: fraud-platform-runtime
+  refreshInterval: 1h
+  data:
+    POLARIS_CREDENTIAL: polaris-credential
