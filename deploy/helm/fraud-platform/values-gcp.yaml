@@ -14,9 +14,9 @@ runtimeSecret:
 
 serviceAccount:
   annotations: {}
-  podLabels:
-    iam.gke.io/gcp-service-account: fraud-spark
-    iam.gke.io/gke-metadata-server-enabled: "true"
+  podLabels: {}
+  cloudIdentity:
+    gcpServiceAccount: ""
 
 externalSecrets:
   enabled: false
