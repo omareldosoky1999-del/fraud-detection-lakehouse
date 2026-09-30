@@ -69,33 +69,40 @@ def _filter_transactions_already_committed(
     iceberg_enabled: bool,
     iceberg_catalog: str,
 ) -> DataFrame:
-    """Prevent duplicate transaction_ids after a Kafka checkpoint reset."""
+    """Prevent duplicate transaction_ids after a Kafka checkpoint reset.
+
+    Missing Silver storage is treated as the first-ever write. Any other
+    read/storage failure is allowed to propagate so a banking workload cannot
+    silently disable duplicate protection during an outage.
+    """
     if silver_df.take(1) == []:
         return silver_df
 
-    try:
-        if iceberg_enabled:
-            existing = (
-                spark.table(f"{iceberg_catalog}.{TABLES['silver']}")
-                .filter(F.col("batch_token") != F.lit(batch_token))
-                .select("transaction_id")
-                .dropDuplicates()
-            )
-        else:
-            existing = (
-                spark.read.parquet(str(silver_path))
-                .filter(F.col("batch_token") != F.lit(batch_token))
-                .select("transaction_id")
-                .dropDuplicates()
-            )
-        return silver_df.join(
-            existing,
-            on="transaction_id",
-            how="left_anti",
+    if iceberg_enabled:
+        table = f"{iceberg_catalog}.{TABLES['silver']}"
+        if not spark.catalog.tableExists(table):
+            return silver_df
+        existing = (
+            spark.table(table)
+            .filter(F.col("batch_token") != F.lit(batch_token))
+            .select("transaction_id")
+            .dropDuplicates()
         )
-    except Exception:
-        # First-ever write: the corresponding Silver store may not exist yet.
-        return silver_df
+    else:
+        if not path_exists(spark, silver_path):
+            return silver_df
+        existing = (
+            spark.read.parquet(str(silver_path))
+            .filter(F.col("batch_token") != F.lit(batch_token))
+            .select("transaction_id")
+            .dropDuplicates()
+        )
+
+    return silver_df.join(
+        existing,
+        on="transaction_id",
+        how="left_anti",
+    )
 
 
 def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
@@ -173,17 +180,21 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
                     .parquet(quarantine_path)
                 )
 
+        # Persist the raw Bronze/Quarantine side of the batch before
+        # duplicate filtering so a batch containing only already-seen
+        # transaction IDs is still represented in the audit layer.
+        if iceberg_enabled and not legacy_hdfs_enabled:
+            write_micro_batch(
+                spark,
+                catalog=iceberg_catalog,
+                batch_token=batch_token,
+                bronze=batch_df,
+                quarantine=invalid,
+                silver=None,
+                decisions=None,
+            )
+
         if valid.rdd.isEmpty():
-            if iceberg_enabled:
-                write_micro_batch(
-                    spark,
-                    catalog=iceberg_catalog,
-                    batch_token=batch_token,
-                    bronze=batch_df,
-                    quarantine=invalid,
-                    silver=None,
-                    decisions=None,
-                )
             if iceberg_enabled and not legacy_hdfs_enabled:
                 mark_committed_iceberg(
                     spark,
