@@ -42,6 +42,12 @@ jobs:
           docker compose -f docker/docker-compose.yml -f docker/docker-compose.lakehouse.yml --profile lakehouse config --quiet
           docker compose -f docker/docker-compose.yml -f docker/docker-compose.lakehouse.yml -f docker/docker-compose.mlflow.yml --profile lakehouse --profile mlops config --quiet
 
+      - name: Helm lint
+        uses: azure/setup-helm@v4
+
+      - name: Lint Kubernetes chart
+        run: helm lint deploy/helm/fraud-platform
+
       - name: Run tests
         run: python -m pytest tests -q
 
