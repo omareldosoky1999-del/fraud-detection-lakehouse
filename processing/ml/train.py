@@ -25,9 +25,6 @@ from processing.streaming.transform import to_silver
 CATEGORICAL = ["txn_type", "status", "currency", "country_src", "country_dest"]
 NUMERIC = [
     "amount_usd",
-    "card_id",
-    "device_id",
-    "client_id",
     "txn_count_5m",
     "amount_sum_1h",
     "avg_amount_prior_30",
