@@ -23,6 +23,11 @@ mlops:
   registry: true
   artifact_store: "s3-compatible"
 
+identity:
+  aws: "eks_pod_identity"
+  azure: "aks_workload_identity"
+  gcp: "gke_workload_identity_federation"
+
 lineage:
   backend: "marquez"
   openlineage: "1.53.0"
