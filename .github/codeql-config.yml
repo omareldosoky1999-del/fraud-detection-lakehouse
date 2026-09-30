@@ -1,0 +1,14 @@
+name: Fraud Platform CodeQL
+
+paths:
+  - common
+  - ingestion
+  - processing
+  - orchestration
+  - scripts
+
+paths-ignore:
+  - ingestion/data
+  - reports
+  - .venv
+  - models
