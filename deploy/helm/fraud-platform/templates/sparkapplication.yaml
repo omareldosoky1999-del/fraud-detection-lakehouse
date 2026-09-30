@@ -1,0 +1,47 @@
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.environment.namespace }}
+  labels:
+    app.kubernetes.io/name: fraud-platform
+    app.kubernetes.io/component: fraud-streaming
+    app.kubernetes.io/part-of: fraud-detection-lakehouse
+spec:
+  type: Python
+  mode: cluster
+  image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag | quote }}
+  imagePullPolicy: {{ .Values.image.pullPolicy }}
+  sparkVersion: {{ .Values.spark.version | quote }}
+  mainApplicationFile: {{ .Values.spark.mainApplicationFile | quote }}
+  restartPolicy:
+    type: {{ .Values.spark.restartPolicy }}
+  driver:
+    cores: {{ .Values.spark.driver.cores }}
+    memory: {{ .Values.spark.driver.memory | quote }}
+    serviceAccount: {{ .Values.spark.serviceAccount }}
+    labels:
+      app.kubernetes.io/name: fraud-platform
+      app.kubernetes.io/component: spark-driver
+  executor:
+    instances: {{ .Values.spark.executor.instances }}
+    cores: {{ .Values.spark.executor.cores }}
+    memory: {{ .Values.spark.executor.memory | quote }}
+    labels:
+      app.kubernetes.io/name: fraud-platform
+      app.kubernetes.io/component: spark-executor
+  envVars:
+{{- range $key, $value := .Values.env }}
+    {{ $key }}: {{ $value | quote }}
+{{- end }}
+  sparkConf:
+    spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+    spark.sql.catalog.polaris: org.apache.iceberg.spark.SparkCatalog
+    spark.sql.catalog.polaris.type: rest
+    spark.sql.catalog.polaris.rest.auth.type: oauth2
+    spark.sql.catalog.polaris.scope: PRINCIPAL_ROLE:ALL
+    spark.sql.catalog.polaris.token-refresh-enabled: "true"
+    spark.extraListeners: io.openlineage.spark.agent.OpenLineageSparkListener
+    spark.openlineage.transport.type: http
+    spark.openlineage.transport.endpoint: /api/v1/lineage
+    spark.openlineage.namespace: fraud_detection
