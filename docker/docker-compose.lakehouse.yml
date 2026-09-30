@@ -8,9 +8,9 @@ services:
       POLARIS_URI: http://polaris:8181/api/catalog
       POLARIS_WAREHOUSE: fraud
       POLARIS_CREDENTIAL: root:s3cr3t
-      ICEBERG_S3_ENDPOINT: http://minio:9000
-      ICEBERG_S3_ACCESS_KEY: polaris_root
-      ICEBERG_S3_SECRET_KEY: polaris_pass
+      ICEBERG_S3_ENDPOINT: http://rustfs:9000
+      ICEBERG_S3_ACCESS_KEY: rustfsadmin
+      ICEBERG_S3_SECRET_KEY: rustfsadmin
 
   spark-worker:
     depends_on:
@@ -22,9 +22,9 @@ services:
       POLARIS_URI: http://polaris:8181/api/catalog
       POLARIS_WAREHOUSE: fraud
       POLARIS_CREDENTIAL: root:s3cr3t
-      ICEBERG_S3_ENDPOINT: http://minio:9000
-      ICEBERG_S3_ACCESS_KEY: polaris_root
-      ICEBERG_S3_SECRET_KEY: polaris_pass
+      ICEBERG_S3_ENDPOINT: http://rustfs:9000
+      ICEBERG_S3_ACCESS_KEY: rustfsadmin
+      ICEBERG_S3_SECRET_KEY: rustfsadmin
   postgres:
     image: postgres:16.15-alpine3.23
     container_name: polaris-postgres
@@ -43,20 +43,24 @@ services:
     profiles: [lakehouse]
     restart: unless-stopped
 
-  minio:
+  rustfs:
     # MinIO is kept as the requested local S3-compatible development adapter.
     # Production deployments use AWS S3 / Azure ADLS Gen2 / GCS instead.
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    container_name: minio
-    command: server /data --console-address ":9001"
+    image: rustfs/rustfs:1.0.0-rc.6
+    container_name: rustfs
+    command: server /data --address "0.0.0.0:9000" --console-address "0.0.0.0:9001"
     environment:
-      MINIO_ROOT_USER: polaris_root
-      MINIO_ROOT_PASSWORD: polaris_pass
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
     ports: ["9000:9000", "9001:9001"]
     volumes:
-      - lakehouse_minio_data:/data
+      - lakehouse_rustfs_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/rustfs/health/live"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -65,22 +69,22 @@ services:
     profiles: [lakehouse]
     restart: unless-stopped
 
-  minio-init:
+  rustfs-init:
     image: amazon/aws-cli:2.36.44
-    container_name: minio-init
+    container_name: rustfs-init
     depends_on:
-      minio: {condition: service_healthy}
+      rustfs: {condition: service_healthy}
     environment:
-      AWS_ACCESS_KEY_ID: polaris_root
-      AWS_SECRET_ACCESS_KEY: polaris_pass
+      AWS_ACCESS_KEY_ID: rustfsadmin
+      AWS_SECRET_ACCESS_KEY: rustfsadmin
       AWS_DEFAULT_REGION: us-east-1
     entrypoint: /bin/sh
     command:
       - -c
       - >-
-        aws --endpoint-url http://minio:9000 s3api head-bucket --bucket iceberg >/dev/null 2>&1 ||
-        aws --endpoint-url http://minio:9000 s3 mb s3://iceberg;
-        aws --endpoint-url http://minio:9000 s3 ls
+        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket iceberg >/dev/null 2>&1 ||
+        aws --endpoint-url http://rustfs:9000 s3 mb s3://iceberg;
+        aws --endpoint-url http://rustfs:9000 s3 ls
     networks: [fraud-net]
     profiles: [lakehouse]
 
@@ -90,11 +94,11 @@ services:
     ports: ["8181:8181", "8182:8182"]
     depends_on:
       postgres: {condition: service_healthy}
-      minio-init: {condition: service_completed_successfully}
+      rustfs-init: {condition: service_completed_successfully}
     environment:
       AWS_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: polaris_root
-      AWS_SECRET_ACCESS_KEY: polaris_pass
+      AWS_ACCESS_KEY_ID: rustfsadmin
+      AWS_SECRET_ACCESS_KEY: rustfsadmin
       POLARIS_PERSISTENCE_TYPE: relational-jdbc
       POLARIS_PERSISTENCE_RELATIONAL_JDBC_DATABASE_TYPE: postgresql
       POLARIS_PERSISTENCE_RELATIONAL_JDBC_MAX_RETRIES: 5
@@ -139,7 +143,7 @@ services:
           -H "Authorization: Bearer $$TOKEN" \
           -H 'Polaris-Realm: POLARIS' \
           -H 'Content-Type: application/json' \
-          -d '{"catalog":{"name":"'"$${CATALOG_NAME}"'","type":"INTERNAL","readOnly":false,"properties":{"default-base-location":"s3://iceberg"},"storageConfigInfo":{"storageType":"S3","allowedLocations":["s3://iceberg"],"endpoint":"http://minio:9000","endpointInternal":"http://minio:9000","pathStyleAccess":true,"region":"us-east-1"}}}')
+          -d '{"catalog":{"name":"'"$${CATALOG_NAME}"'","type":"INTERNAL","readOnly":false,"properties":{"default-base-location":"s3://iceberg"},"storageConfigInfo":{"storageType":"S3","allowedLocations":["s3://iceberg"],"endpoint":"http://rustfs:9000","endpointInternal":"http://rustfs:9000","pathStyleAccess":true,"region":"us-east-1"}}}')
         case "$$RESPONSE" in
           200|201|409) echo "Polaris catalog '$${CATALOG_NAME}' ready (HTTP $$RESPONSE)" ;;
           *) cat /tmp/catalog.json >&2; exit 1 ;;
@@ -163,5 +167,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  lakehouse_minio_data:
+  lakehouse_rustfs_data:
   polaris_postgres_data:
