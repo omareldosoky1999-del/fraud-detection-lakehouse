@@ -1,0 +1,11 @@
+# MLflow Model Registry contract for the fraud decision engine.
+# Every member is trained with Spark MLlib and promoted under the same alias.
+registry:
+  alias: production
+  members:
+    - logical_name: logistic_regression
+      registered_name: fraud_logistic_regression
+    - logical_name: random_forest
+      registered_name: fraud_random_forest
+    - logical_name: gbt
+      registered_name: fraud_gbt
