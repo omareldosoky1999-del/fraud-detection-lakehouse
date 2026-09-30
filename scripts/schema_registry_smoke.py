@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import struct
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -16,6 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "ingestion" / "schema" / "transaction.avsc"
 TARGET_TOPIC = "transactions"
 SUBJECT = TARGET_TOPIC + "-value"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 
 def main():
