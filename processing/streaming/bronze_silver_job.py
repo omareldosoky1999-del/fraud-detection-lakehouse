@@ -60,18 +60,41 @@ def _write_bronze(batch_df: DataFrame, *, bronze_path: str, batch_token: str) ->
      .parquet(bronze_path))
 
 
-def _filter_transactions_already_committed(silver_df: DataFrame, spark, silver_path: str,
-                                           batch_token: str) -> DataFrame:
-    """Prevent duplicate transaction_ids when the Kafka checkpoint is reset."""
-    if not silver_df.take(1):
+def _filter_transactions_already_committed(
+    silver_df: DataFrame,
+    spark,
+    silver_path: str,
+    batch_token: str,
+    *,
+    iceberg_enabled: bool,
+    iceberg_catalog: str,
+) -> DataFrame:
+    """Prevent duplicate transaction_ids after a Kafka checkpoint reset."""
+    if silver_df.take(1) == []:
         return silver_df
+
     try:
-        existing = spark.read.parquet(str(silver_path)).filter(
-            F.col("batch_token") != F.lit(batch_token)
-        ).select("transaction_id").dropDuplicates()
-        return silver_df.join(existing, on="transaction_id", how="left_anti")
+        if iceberg_enabled:
+            existing = (
+                spark.table(f"{iceberg_catalog}.{TABLES['silver']}")
+                .filter(F.col("batch_token") != F.lit(batch_token))
+                .select("transaction_id")
+                .dropDuplicates()
+            )
+        else:
+            existing = (
+                spark.read.parquet(str(silver_path))
+                .filter(F.col("batch_token") != F.lit(batch_token))
+                .select("transaction_id")
+                .dropDuplicates()
+            )
+        return silver_df.join(
+            existing,
+            on="transaction_id",
+            how="left_anti",
+        )
     except Exception:
-        # First-ever write: the base path may not exist yet.
+        # First-ever write: the corresponding Silver store may not exist yet.
         return silver_df
 
 
@@ -171,8 +194,18 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
                 mark_committed(spark, commit_root, batch_token)
             return
 
-        silver = to_silver(valid).withColumn("batch_token", F.lit(batch_token))
-        silver = _filter_transactions_already_committed(silver, spark, silver_path, batch_token).cache()
+        silver = to_silver(valid).withColumn(
+            "batch_token",
+            F.lit(batch_token),
+        )
+        silver = _filter_transactions_already_committed(
+            silver,
+            spark,
+            silver_path,
+            batch_token,
+            iceberg_enabled=iceberg_enabled,
+            iceberg_catalog=iceberg_catalog,
+        ).cache()
         if silver.rdd.isEmpty():
             silver.unpersist()
             mark_committed(spark, commit_root, batch_token)
