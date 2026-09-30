@@ -1,4 +1,26 @@
 services:
+  spark-master:
+    environment:
+      OPENLINEAGE_ENABLED: "true"
+      OPENLINEAGE_URL: http://marquez:5000
+      OPENLINEAGE_ENDPOINT: /api/v1/lineage
+      OPENLINEAGE_NAMESPACE: fraud_detection
+      OPENLINEAGE_TIMEOUT_MS: "5000"
+    depends_on:
+      marquez: {condition: service_healthy}
+
+  spark-worker:
+    environment:
+      OPENLINEAGE_ENABLED: "true"
+      OPENLINEAGE_URL: http://marquez:5000
+      OPENLINEAGE_ENDPOINT: /api/v1/lineage
+      OPENLINEAGE_NAMESPACE: fraud_detection
+      OPENLINEAGE_TIMEOUT_MS: "5000"
+    depends_on:
+      spark-master: {condition: service_started}
+      marquez: {condition: service_healthy}
+
+services:
   marquez-db:
     image: postgres:14
     container_name: marquez-db
