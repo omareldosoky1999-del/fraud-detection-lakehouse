@@ -26,6 +26,7 @@ from pyspark.sql import DataFrame, Window, functions as F
 
 from processing.common.spark_session import get_spark
 from processing.lakehouse.iceberg_tables import write_micro_batch
+from processing.features.fraud_features import add_fraud_features
 from processing.ml.inference import apply_ml_ensemble, load_models
 from processing.monitoring.metrics import (
     fraud_alerts_total, fraud_batches_total, fraud_batch_duration_seconds,
@@ -164,8 +165,15 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
                    .filter(F.col("client_id").isin(touched_clients))
                    .filter(F.col("event_time") >= F.lit(history_start)))
         combined = history.unionByName(silver, allowMissingColumns=True).dropDuplicates(["transaction_id"])
+        featured_all = add_fraud_features(combined)
+        feature_batch = (
+            featured_all
+            .filter(F.col("transaction_id").isin(batch_ids))
+            .withColumn("batch_token", F.lit(batch_token))
+            .cache()
+        )
 
-        decided_all = apply_rules(combined)
+        decided_all = apply_rules(featured_all)
         if ml_models:
             decided_all = apply_ml_ensemble(decided_all, ml_models, threshold=ml_threshold)
         decided_batch = (decided_all
@@ -186,6 +194,7 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
                 quarantine=invalid,
                 silver=silver,
                 decisions=decided_batch,
+                features=feature_batch,
             )
 
         if hbase_factory:
@@ -213,6 +222,7 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
         if fraud_batch_duration_seconds is not None:
             fraud_batch_duration_seconds.observe(time.monotonic() - batch_started)
         silver.unpersist()
+        feature_batch.unpersist()
         decided_batch.unpersist()
 
     return process_batch
