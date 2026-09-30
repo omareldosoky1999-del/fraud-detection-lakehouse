@@ -1,4 +1,21 @@
 services:
+  spark-master:
+    depends_on:
+      mlflow: {condition: service_healthy}
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_MODEL_CONFIG: /app/config/ml_models.yml
+      MLFLOW_MODEL_ALIAS: production
+
+  spark-worker:
+    depends_on:
+      spark-master: {condition: service_started}
+      mlflow: {condition: service_healthy}
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_MODEL_CONFIG: /app/config/ml_models.yml
+      MLFLOW_MODEL_ALIAS: production
+
   mlflow-postgres:
     image: postgres:16.15-alpine3.23
     container_name: mlflow-postgres
