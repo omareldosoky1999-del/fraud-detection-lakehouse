@@ -72,7 +72,24 @@ def _replace_batch(
     _ensure_table(spark, table, frame, partition_columns, temp_view)
 
     escaped = batch_token.replace("'", "''")
-    spark.sql(f"DELETE FROM {table} WHERE batch_token = '{escaped}'")
+    partition_rows = frame.select(*partition_columns).distinct().collect()
+    if partition_rows:
+        predicates = []
+        for row in partition_rows:
+            parts = []
+            for column in partition_columns:
+                value = row[column]
+                if value is None:
+                    parts.append(f"{column} IS NULL")
+                else:
+                    literal = str(value).replace("'", "''")
+                    parts.append(f"{column} = DATE '{literal}'" if "date" in column else f"{column} = '{literal}'")
+            predicates.append("(" + " AND ".join(parts) + ")")
+        partition_predicate = " OR ".join(predicates)
+        spark.sql(
+            f"DELETE FROM {table} "
+            f"WHERE batch_token = '{escaped}' AND ({partition_predicate})"
+        )
 
     frame.writeTo(table).append()
 
