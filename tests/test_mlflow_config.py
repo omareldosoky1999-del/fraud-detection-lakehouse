@@ -29,7 +29,8 @@ def test_mlflow_overlay_is_pinned_and_wired():
     config = yaml.safe_load(
         (ROOT / "config" / "ml_models.yml").read_text(encoding="utf-8")
     )
-    assert config["registry"]["alias"] == "production"
+    assert config["registry"]["candidate_alias"] == "candidate"
+    assert config["registry"]["production_alias"] == "production"
     assert config["registry"]["decision_threshold"] == 0.70
     assert config["registry"]["min_validation_auc"] >= 0.5
     assert len(config["registry"]["members"]) == 3
