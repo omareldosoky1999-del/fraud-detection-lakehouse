@@ -305,6 +305,7 @@ services:
     ports: ["9093:9093"]
     volumes:
       - ../monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
       - --storage.path=/alertmanager
@@ -343,4 +344,5 @@ volumes:
   hive_data:
   prometheus-data:
   grafana-data:
+  alertmanager-data:
   alerts-data:
