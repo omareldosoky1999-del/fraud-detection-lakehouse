@@ -1,14 +1,108 @@
 {
-  "annotations": {"list": []},
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "graphTooltip": 0,
   "panels": [
-    {"type":"timeseries","title":"Fraud Decisions / sec","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"rate(fraud_decisions_total[1m])","legendFormat":"decisions/s"}]},
-    {"type":"timeseries","title":"Alerts / sec","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"rate(fraud_alerts_total[1m])","legendFormat":"alerts/s"}]},
-    {"type":"timeseries","title":"Quarantined / sec","gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"expr":"rate(fraud_quarantined_total[1m])","legendFormat":"quarantine/s"}]},
-    {"type":"timeseries","title":"Batch Duration","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"histogram_quantile(0.95, sum(rate(fraud_batch_duration_seconds_bucket[5m])) by (le))","legendFormat":"p95 seconds"}]}
+    {
+      "type": "timeseries",
+      "title": "Fraud Decisions / sec",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "rate(fraud_decisions_total[1m])",
+          "legendFormat": "decisions/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Alerts / sec",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "rate(fraud_alerts_total[1m])",
+          "legendFormat": "alerts/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Quarantined / sec",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(fraud_quarantined_total[1m])",
+          "legendFormat": "quarantine/s"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Batch Duration",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(fraud_batch_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95 seconds"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Average ML Fraud Probability",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(fraud_ml_probability_bucket[5m])) by (le))",
+          "legendFormat": "p50 probability"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Feature Rows / sec",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "rate(fraud_feature_rows_total[1m])",
+          "legendFormat": "feature rows/s"
+        }
+      ]
+    }
   ],
   "schemaVersion": 39,
   "title": "Fraud Platform",
-  "version": 1
+  "version": 2
 }
