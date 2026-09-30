@@ -5,6 +5,7 @@ environment:
 env:
   ICEBERG_FILEIO_IMPL: org.apache.iceberg.gcp.gcs.GCSFileIO
   POLARIS_URI: https://polaris.example.internal/api/catalog
+  POLARIS_TOKEN_URI: https://polaris.example.internal/api/catalog/v1/oauth/tokens
   MLFLOW_TRACKING_URI: https://mlflow.example.internal
   OPENLINEAGE_URL: https://marquez.example.internal
 runtimeSecret:
