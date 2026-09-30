@@ -25,6 +25,7 @@ from pathlib import Path
 from pyspark.sql import DataFrame, Window, functions as F
 
 from processing.common.spark_session import get_spark
+from processing.lakehouse.iceberg_tables import write_micro_batch
 from processing.ml.inference import apply_ml_ensemble, load_models
 from processing.monitoring.metrics import (
     fraud_alerts_total, fraud_batches_total, fraud_batch_duration_seconds,
@@ -74,8 +75,13 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
                           silver_path, quarantine_path, decisions_path,
                           commit_root=None,
                           hbase_host, hbase_port, kafka_bootstrap, alerts_topic,
-                          history_hours=HISTORY_LOOKBACK_HOURS, ml_model_dir=None, ml_threshold=0.70):
+                          history_hours=HISTORY_LOOKBACK_HOURS, ml_model_dir=None, ml_threshold=0.70,
+                          iceberg_enabled=None, iceberg_catalog=None):
     commit_root = commit_root or f"{decisions_path.rstrip('/')} /_batch_commits".replace(" /", "/")
+    if iceberg_enabled is None:
+        iceberg_enabled = os.getenv("ICEBERG_ENABLED", "false").lower() == "true"
+    if iceberg_catalog is None:
+        iceberg_catalog = os.getenv("ICEBERG_CATALOG_NAME", "polaris")
     hbase_factory = build_connection_factory(hbase_host, hbase_port) if hbase_host else None
     ml_models = load_models(ml_model_dir) if ml_model_dir else []
     spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
@@ -116,6 +122,16 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
              .parquet(quarantine_path))
 
         if valid.rdd.isEmpty():
+            if iceberg_enabled:
+                write_micro_batch(
+                    spark,
+                    catalog=iceberg_catalog,
+                    batch_token=batch_token,
+                    bronze=batch_df,
+                    quarantine=invalid,
+                    silver=None,
+                    decisions=None,
+                )
             mark_committed(spark, commit_root, batch_token)
             return
 
@@ -155,6 +171,17 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
         (decided_batch.write.mode("overwrite")
          .partitionBy("batch_token", "event_date")
          .parquet(decisions_path))
+
+        if iceberg_enabled:
+            write_micro_batch(
+                spark,
+                catalog=iceberg_catalog,
+                batch_token=batch_token,
+                bronze=batch_df,
+                quarantine=invalid,
+                silver=silver,
+                decisions=decided_batch,
+            )
 
         if hbase_factory:
             latest_w = (Window.partitionBy("client_id")
@@ -214,6 +241,8 @@ def run(args):
         alerts_topic=args.alerts_topic,
         ml_model_dir=args.ml_model_dir,
         ml_threshold=args.ml_threshold,
+        iceberg_enabled=not args.no_iceberg,
+        iceberg_catalog=args.iceberg_catalog,
     )
 
     (events.writeStream
@@ -240,6 +269,8 @@ def main(argv=None):
     ap.add_argument("--commit-root", default=os.getenv("BATCH_COMMIT_ROOT", DEFAULT_BATCH_COMMITS))
     ap.add_argument("--ml-model-dir", default=os.getenv("ML_MODEL_DIR"))
     ap.add_argument("--ml-threshold", type=float, default=float(os.getenv("ML_THRESHOLD", "0.70")))
+    ap.add_argument("--iceberg-catalog", default=os.getenv("ICEBERG_CATALOG_NAME", "polaris"))
+    ap.add_argument("--no-iceberg", action="store_true")
     ap.add_argument("--hbase-host", default=os.getenv("HBASE_HOST", "hbase"))
     ap.add_argument("--hbase-port", type=int, default=int(os.getenv("HBASE_THRIFT_PORT", "9090")))
     ap.add_argument("--no-hbase", action="store_true")
