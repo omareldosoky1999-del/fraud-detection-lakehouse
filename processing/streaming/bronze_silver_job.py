@@ -39,7 +39,7 @@ from processing.serving.alerts_sink import write_alerts
 from processing.serving.hbase_sink import build_connection_factory, write_partition
 from processing.streaming.batch_commit import (
     batch_path, build_batch_token, delete_path, is_committed, mark_committed,
-    is_committed_iceberg, mark_committed_iceberg,
+    is_committed_iceberg, mark_committed_iceberg, path_exists,
 )
 from processing.streaming.decode import decode_transactions
 from processing.streaming.transform import dedup_batch, split_valid_invalid, to_silver
