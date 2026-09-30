@@ -1,3 +1,4 @@
+from pathlib import Path
 import json
 from datetime import datetime
 
@@ -161,3 +162,9 @@ def test_ensure_table_creates_serving_table_once():
     ensure_table(conn)
     ensure_table(conn)
     assert conn.created == [("fraud:client_risk", {"cf": {}})]
+
+
+def test_serving_api_does_not_leak_hbase_exception_by_default():
+    source = (Path(__file__).parents[1] / "processing" / "serving" / "api.py").read_text(encoding="utf-8")
+    assert 'os.getenv("API_DEBUG", "false")' in source
+    assert 'response = {"error": "hbase_unavailable"}' in source
