@@ -1,0 +1,9 @@
+environment:
+  name: azure
+  namespace: fraud-platform
+
+env:
+  ICEBERG_FILEIO_IMPL: org.apache.iceberg.azure.adlsv2.ADLSFileIO
+  POLARIS_URI: https://polaris.example.internal/api/catalog
+  MLFLOW_TRACKING_URI: https://mlflow.example.internal
+  OPENLINEAGE_URL: https://marquez.example.internal
