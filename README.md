@@ -34,6 +34,49 @@ Business thresholds are in `config/fraud_rules.yml`, not hard-coded in the rules
 
 `processing/ml/train.py` trains Logistic Regression, Random Forest and GBT pipelines with a time-based validation split. The current artifact format is file-based; the MLOps phase will move tracking, versioning and promotion into MLflow Model Registry.
 
+
+## MLOps / MLflow
+
+The fraud models are managed as a first-class MLOps lifecycle:
+
+```text
+Spark MLlib training
+  -> MLflow Tracking
+  -> PostgreSQL metadata store
+  -> RustFS S3-compatible artifact store
+  -> Model Registry
+  -> production alias
+  -> Spark Structured Streaming inference
+```
+
+The registry contract is in `config/ml_models.yml`. Logistic Regression, Random Forest and GBT are registered as separate ensemble members. Streaming inference resolves their current `production` versions through MLflow aliases instead of hard-coded model files. MLflow's Tracking Server supports PostgreSQL as a backend store and remote object storage for artifacts; aliases are designed to decouple deployed inference code from a specific model version. citeturn347240search2turn347240search3
+
+### Start the Lakehouse + MLOps stack
+
+```bash
+docker compose \\
+  -f docker/docker-compose.yml \\
+  -f docker/docker-compose.lakehouse.yml \\
+  -f docker/docker-compose.mlflow.yml \\
+  --profile lakehouse --profile mlops up -d --build
+```
+
+Open MLflow at `http://localhost:5000`.
+
+### Train and register the fraud ensemble
+
+```bash
+docker exec spark-master \\
+  /opt/spark/bin/spark-submit \\
+  --master spark://spark-master:7077 \\
+  /app/processing/ml/train.py \\
+  --n 20000 \\
+  --tracking-uri http://mlflow:5000 \\
+  --promote-alias production
+```
+
+Training uses a time-based validation split and registers each validated Spark MLlib model under the configured registry name. The streaming job loads the same three members from the `production` alias when `MLFLOW_TRACKING_URI` is configured.
+
 ## Serving
 
 The optional `serving-api` exposes:
