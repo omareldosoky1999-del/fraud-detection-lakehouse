@@ -11,6 +11,7 @@ Synthetic Generator
        -> Bronze (raw decoded events)
        -> DQ / Quarantine
        -> Silver (Decimal money + FX)
+       -> Point-in-time Feature Layer
        -> Config-driven Rules + MLlib ensemble (core decision signal)
        -> Fraud Decisions
             -> HBase current-risk API
@@ -34,6 +35,12 @@ Business thresholds are in `config/fraud_rules.yml`, not hard-coded in the rules
 
 `processing/ml/train.py` trains Logistic Regression, Random Forest and GBT pipelines with a time-based validation split. The current artifact format is file-based; the MLOps phase will move tracking, versioning and promotion into MLflow Model Registry.
 
+
+## Feature engineering
+
+The shared feature builder lives in `processing/features/fraud_features.py` and is used by both ML training and streaming inference. Features are causal: each row uses only the current transaction and data that occurred before it. The current feature contract includes 5-minute transaction velocity, 1-hour amount sum, prior-30-transaction amount statistics, time since previous transaction, 30-day new-device detection, country changes and amount-to-prior-average ratio.
+
+Streaming feature batches are persisted in the Iceberg table `features.transaction_features`, making model inputs auditable and queryable through Trino.
 
 ## MLOps / MLflow
 
