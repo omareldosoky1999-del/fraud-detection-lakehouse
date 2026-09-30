@@ -6,11 +6,5 @@ fastavro>=1.9
 pytest>=7
 pandas>=2.0
 pyarrow>=14
-# NOTE: pyspark is deliberately NOT pinned here. The cluster (docker-compose)
-# runs Spark 3.0.0 via the bde2020 images; for running `pytest tests` on your
-# own machine, install a pyspark version your local Java supports, e.g.:
-#   pip install pyspark==3.5.1   (needs Java 11/17/21)
-#   pip install pyspark==3.0.3   (needs Java 8/11, matches the cluster exactly)
-# Both were validated against this test suite; only Spark-API calls available
-# since 3.0.0 are used in processing/, so either works for local testing.
+# Canonical Spark runtime: Docker and CI both use Spark 3.5.9 + Java 17.
 pyspark==3.5.9
