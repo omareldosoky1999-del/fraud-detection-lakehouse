@@ -206,13 +206,12 @@ services:
       test:
         - CMD-SHELL
         - >-
-          (echo "create_namespace 'fraud'" | hbase shell -n >/dev/null 2>&1 || true) &&
-          (echo "create 'fraud:client_risk', 'cf'" | hbase shell -n >/dev/null 2>&1 || true) &&
+          curl -fsS http://localhost:16010/master-status >/dev/null 2>&1 &&
           echo 'status' | hbase shell -n >/dev/null 2>&1
-      interval: 20s
-      timeout: 15s
-      retries: 20
-      start_period: 45s
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
     deploy: {resources: {limits: {memory: 2g}}}
     networks: [fraud-net]
     profiles: [serving]
