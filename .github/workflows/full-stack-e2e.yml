@@ -127,10 +127,13 @@ jobs:
             --checkpoint /tmp/full-stack-producer-checkpoint.json \
             --labels-out /tmp/full-stack-ground-truth.csv
 
+      - name: Wait for Trino
+        run: bash scripts/wait_for_trino.sh
+
       - name: Verify Iceberg transaction decisions through Trino
         run: |
           for i in $(seq 1 40); do
-            count=$(docker exec trino trino --execute "SELECT count(*) FROM polaris.gold.fraud_decisions" --output-format CSV_HEADER=false 2>/dev/null | tr -d '\r' || true)
+            count=$(docker exec trino trino --server http://localhost:8080 --execute "SELECT count(*) FROM polaris.gold.fraud_decisions" --output-format CSV_HEADER=false 2>/dev/null | tr -d '\r' || true)
             echo "decision_rows=$count"
             if [ "${count:-0}" -gt 0 ]; then exit 0; fi
             sleep 3
@@ -149,7 +152,7 @@ jobs:
 
       - name: Verify Gold aggregates through Trino
         run: |
-          kpis=$(docker exec trino trino --execute \
+          kpis=$(docker exec trino trino --server http://localhost:8080 --execute \
             "SELECT total_txns FROM polaris.gold.daily_kpis WHERE event_date = DATE '2026-09-01'" \
             --output-format CSV_HEADER=false | tr -d '\r')
           echo "gold_daily_kpis=$kpis"
@@ -160,10 +163,10 @@ jobs:
         run: |
           docker cp warehouse/trino/semantic_views.sql trino:/tmp/semantic_views.sql
           docker exec trino trino --file /tmp/semantic_views.sql
-          non_pass=$(docker exec trino trino --execute \
+          non_pass=$(docker exec trino trino --server http://localhost:8080 --execute \
             "SELECT count(*) FROM polaris.analytics.fraud_transaction_risk WHERE decision <> 'PASS'" \
             --output-format CSV_HEADER=false | tr -d '\r')
-          scored=$(docker exec trino trino --execute \
+          scored=$(docker exec trino trino --server http://localhost:8080 --execute \
             "SELECT count(*) FROM polaris.analytics.fraud_transaction_risk WHERE ml_probability IS NOT NULL" \
             --output-format CSV_HEADER=false | tr -d '\r')
           echo "non_pass=$non_pass scored_with_ml_probability=$scored"
@@ -192,7 +195,7 @@ jobs:
 
       - name: Verify HBase serving API has client state
         run: |
-          client=$(docker exec trino trino --execute \
+          client=$(docker exec trino trino --server http://localhost:8080 --execute \
             "SELECT min(client_id) FROM polaris.gold.fraud_decisions" \
             --output-format CSV_HEADER=false | tr -d '\r')
           test -n "$client"
