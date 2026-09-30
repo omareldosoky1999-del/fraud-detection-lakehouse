@@ -28,7 +28,24 @@ def _load(path: str) -> dict:
 def _merge_services(*paths: str) -> dict:
     services = {}
     for path in paths:
-        services.update(_load(path).get("services", {}))
+        overlay_services = _load(path).get("services", {})
+        for name, spec in overlay_services.items():
+            if name not in services:
+                services[name] = dict(spec)
+                continue
+
+            merged = {**services[name], **spec}
+
+            # Compose overlays can intentionally attach different profiles to
+            # the same shared service (e.g. RustFS serves both Lakehouse and
+            # MLOps). Preserve the union for static dependency validation.
+            previous_profiles = services[name].get("profiles", [])
+            overlay_profiles = spec.get("profiles", [])
+            profiles = list(dict.fromkeys(previous_profiles + overlay_profiles))
+            if profiles:
+                merged["profiles"] = profiles
+
+            services[name] = merged
     return services
 
 
