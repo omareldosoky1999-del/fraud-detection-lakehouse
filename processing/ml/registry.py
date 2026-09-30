@@ -25,3 +25,10 @@ def registry_members(path: str | Path | None = None) -> list[dict]:
 def production_alias(path: str | Path | None = None) -> str:
     configured = os.getenv("MLFLOW_MODEL_ALIAS")
     return configured or load_registry_config(path).get("alias", "production")
+
+
+def decision_threshold(path: str | Path | None = None) -> float:
+    configured = os.getenv("ML_THRESHOLD")
+    if configured is not None:
+        return float(configured)
+    return float(load_registry_config(path).get("decision_threshold", 0.70))
