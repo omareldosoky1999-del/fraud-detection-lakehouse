@@ -21,3 +21,7 @@ output "eks_cluster_name" {
 output "eks_oidc_issuer" {
   value = var.enable_eks ? module.eks[0].oidc_issuer : null
 }
+
+output "workload_identity_role_arn" {
+  value = var.enable_eks ? module.workload_identity[0].role_arn : null
+}
