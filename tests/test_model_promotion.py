@@ -21,3 +21,11 @@ def test_registry_contract_separates_candidate_and_production():
     assert config['candidate_alias'] != config['production_alias']
     assert config['candidate_alias'] == 'candidate'
     assert config['production_alias'] == 'production'
+
+
+def test_retraining_dag_promotes_candidate_only():
+    dag = (ROOT / "orchestration" / "dags" / "fraud_ml_retraining_dag.py").read_text(
+        encoding="utf-8"
+    )
+    assert "--promote-alias candidate" in dag
+    assert "--promote-alias production" not in dag
