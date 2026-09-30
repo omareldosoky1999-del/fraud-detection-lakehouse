@@ -8,3 +8,4 @@ pandas>=2.0
 pyarrow>=14
 # Canonical Spark runtime: Docker and CI both use Spark 3.5.9 + Java 17.
 pyspark==3.5.9
+mlflow==3.16.0
