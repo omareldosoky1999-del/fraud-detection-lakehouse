@@ -102,6 +102,7 @@ def train(
     experiment: str = "fraud-detection/spark-ml-ensemble",
     registry_config: str = "config/ml_models.yml",
     promote_alias: str | None = None,
+    ml_threshold: float | None = None,
 ):
     tracking_uri = tracking_uri or os.getenv("MLFLOW_TRACKING_URI")
     if not tracking_uri:
@@ -117,7 +118,17 @@ def train(
 
     registry = load_registry_config(registry_config)
     alias = promote_alias or os.getenv("MLFLOW_PROMOTE_ALIAS", registry.get("alias", "production"))
-    min_validation_auc = float(os.getenv("MLFLOW_MIN_VALIDATION_AUC", registry.get("min_validation_auc", 0.65)))
+    min_validation_auc = float(
+        os.getenv(
+            "MLFLOW_MIN_VALIDATION_AUC",
+            registry.get("min_validation_auc", 0.65),
+        )
+    )
+    decision_threshold = (
+        float(ml_threshold)
+        if ml_threshold is not None
+        else float(os.getenv("ML_THRESHOLD", registry.get("decision_threshold", 0.70)))
+    )
     members = {m["logical_name"]: m["registered_name"] for m in registry_members(registry_config)}
 
     spark = get_spark("fraud-ml-train", enable_hive=False)
@@ -158,17 +169,49 @@ def train(
         out = Path(model_dir)
         out.mkdir(parents=True, exist_ok=True)
 
-        evaluator = BinaryClassificationEvaluator(
+        positives = train_df.filter(F.col("label") == 1.0).count()
+        negatives = train_df.filter(F.col("label") == 0.0).count()
+        if positives == 0 or negatives == 0:
+            raise ValueError(
+                f"Training split must contain both classes: positives={positives}, "
+                f"negatives={negatives}"
+            )
+
+        positive_weight = negatives / positives
+        weighted_train = train_df.withColumn(
+            "class_weight",
+            F.when(F.col("label") == 1.0, F.lit(positive_weight))
+            .otherwise(F.lit(1.0)),
+        ).cache()
+
+        evaluator_roc = BinaryClassificationEvaluator(
             labelCol="label",
             rawPredictionCol="rawPrediction",
             metricName="areaUnderROC",
         )
+        evaluator_pr = BinaryClassificationEvaluator(
+            labelCol="label",
+            rawPredictionCol="rawPrediction",
+            metricName="areaUnderPR",
+        )
         estimators = {
-            "logistic_regression": LogisticRegression(maxIter=50, regParam=0.05),
-            "random_forest": RandomForestClassifier(
-                numTrees=80, maxDepth=10, seed=seed
+            "logistic_regression": LogisticRegression(
+                maxIter=50,
+                regParam=0.05,
+                weightCol="class_weight",
             ),
-            "gbt": GBTClassifier(maxIter=60, maxDepth=5, seed=seed),
+            "random_forest": RandomForestClassifier(
+                numTrees=80,
+                maxDepth=10,
+                seed=seed,
+                weightCol="class_weight",
+            ),
+            "gbt": GBTClassifier(
+                maxIter=60,
+                maxDepth=5,
+                seed=seed,
+                weightCol="class_weight",
+            ),
         }
 
         metrics = {
@@ -192,13 +235,45 @@ def train(
                     "validation_strategy": "time_based_80_20",
                     "spark_version": spark.version,
                     "min_validation_auc": min_validation_auc,
+                    "decision_threshold": decision_threshold,
+                    "positive_weight": positive_weight,
+                    "train_positive_rows": positives,
+                    "train_negative_rows": negatives,
                 }
             )
 
             for logical_name, estimator in estimators.items():
-                model = _pipeline(estimator).fit(train_df)
+                model = _pipeline(estimator).fit(weighted_train)
                 predictions = model.transform(validation_df)
-                auc = float(evaluator.evaluate(predictions))
+                auc = float(evaluator_roc.evaluate(predictions))
+                auprc = float(evaluator_pr.evaluate(predictions))
+
+                scored = predictions.withColumn(
+                    "_ml_score",
+                    F.col("probability")[1],
+                ).withColumn(
+                    "_ml_decision",
+                    F.when(
+                        F.col("_ml_score") >= F.lit(decision_threshold),
+                        F.lit(1.0),
+                    ).otherwise(F.lit(0.0)),
+                )
+                tp = scored.filter(
+                    (F.col("label") == 1.0) & (F.col("_ml_decision") == 1.0)
+                ).count()
+                fp = scored.filter(
+                    (F.col("label") == 0.0) & (F.col("_ml_decision") == 1.0)
+                ).count()
+                fn = scored.filter(
+                    (F.col("label") == 1.0) & (F.col("_ml_decision") == 0.0)
+                ).count()
+                precision = tp / (tp + fp) if (tp + fp) else 0.0
+                recall = tp / (tp + fn) if (tp + fn) else 0.0
+                f1 = (
+                    2 * precision * recall / (precision + recall)
+                    if (precision + recall)
+                    else 0.0
+                )
 
                 model.write().overwrite().save(str(out / logical_name))
 
@@ -211,6 +286,10 @@ def train(
 
                 registered_name = members[logical_name]
                 mlflow.log_metric(f"{logical_name}_validation_auc", auc)
+                mlflow.log_metric(f"{logical_name}_validation_auprc", auprc)
+                mlflow.log_metric(f"{logical_name}_validation_precision", precision)
+                mlflow.log_metric(f"{logical_name}_validation_recall", recall)
+                mlflow.log_metric(f"{logical_name}_validation_f1", f1)
 
                 version = _register_spark_model(
                     model=model,
@@ -221,6 +300,11 @@ def train(
                     metadata={
                         "validation_status": "PASSED",
                         "validation_auc": auc,
+                        "validation_auprc": auprc,
+                        "validation_precision": precision,
+                        "validation_recall": recall,
+                        "validation_f1": f1,
+                        "decision_threshold": decision_threshold,
                         "ensemble_member": "true",
                         "ensemble_run_id": run.info.run_id,
                         "spark_version": spark.version,
@@ -235,6 +319,11 @@ def train(
 
                 metrics[logical_name] = {
                     "validation_auc": auc,
+                    "validation_auprc": auprc,
+                    "validation_precision": precision,
+                    "validation_recall": recall,
+                    "validation_f1": f1,
+                    "decision_threshold": decision_threshold,
                     "min_validation_auc": min_validation_auc,
                     "registered_name": registered_name,
                     "registry_version": str(version),
@@ -242,7 +331,9 @@ def train(
                 }
 
                 print(
-                    f"[MLFLOW] {logical_name}: auc={auc:.4f}, "
+                    f"[MLFLOW] {logical_name}: auc={auc:.4f}, auprc={auprc:.4f}, "
+                    f"precision@{decision_threshold:.2f}={precision:.4f}, "
+                    f"recall@{decision_threshold:.2f}={recall:.4f}, "
                     f"registered={registered_name}@{version}; pending alias={alias}"
                 )
 
@@ -299,6 +390,8 @@ def train(
             train_df.unpersist()
         if validation_df is not None:
             validation_df.unpersist()
+        if "weighted_train" in locals() and weighted_train is not None:
+            weighted_train.unpersist()
         spark.stop()
 
 
@@ -320,6 +413,12 @@ def main(argv=None):
         "--promote-alias",
         default=os.getenv("MLFLOW_PROMOTE_ALIAS"),
         help="Alias assigned to each successfully validated ensemble member.",
+    )
+    parser.add_argument(
+        "--ml-threshold",
+        type=float,
+        default=os.getenv("ML_THRESHOLD"),
+        help="Probability threshold used for validation precision/recall metrics.",
     )
     args = parser.parse_args(argv)
     train(
