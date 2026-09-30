@@ -38,3 +38,23 @@ def test_cloud_values_define_workload_identity_contracts():
     assert azure["serviceAccount"]["annotations"] == {}
     assert gcp["serviceAccount"]["annotations"] == {}
     assert aws["serviceAccount"]["annotations"] == {}
+
+
+def test_external_secret_template_and_cloud_contracts():
+    template = (ROOT / "templates" / "externalsecret.yaml").read_text(encoding="utf-8")
+    values = yaml.safe_load((ROOT / "values.yaml").read_text(encoding="utf-8"))
+
+    assert "apiVersion: external-secrets.io/v1" in template
+    assert "kind: ExternalSecret" in template
+    assert "secretStoreRef:" in template
+    assert "remoteRef:" in template
+    assert values["externalSecrets"]["enabled"] is False
+    assert values["externalSecrets"]["targetName"] == "fraud-platform-runtime"
+
+    for env in ["aws", "azure", "gcp"]:
+        cfg = yaml.safe_load(
+            (ROOT / f"values-{env}.yaml").read_text(encoding="utf-8")
+        )
+        assert cfg["externalSecrets"]["enabled"] is False
+        assert cfg["externalSecrets"]["secretStoreRef"]["kind"] == "ClusterSecretStore"
+        assert cfg["externalSecrets"]["targetName"] == "fraud-platform-runtime"
