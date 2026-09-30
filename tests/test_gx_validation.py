@@ -51,6 +51,14 @@ def test_invalid_negative_amount_fails_gx(spark):
     with pytest.raises(ValueError, match="Great Expectations Silver contract failed"):
         assert_silver_dataframe(df)
 
+def test_default_contract_is_cwd_independent(tmp_path, monkeypatch):
+    from processing.quality.gx_validation import load_silver_contract
+
+    monkeypatch.chdir(tmp_path)
+    contract = load_silver_contract()
+    assert contract["not_null_columns"]
+
+
 def test_silver_contract_is_declarative():
     from processing.quality.gx_validation import build_expectations, load_silver_contract
 
