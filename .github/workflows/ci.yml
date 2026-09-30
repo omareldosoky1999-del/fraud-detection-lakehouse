@@ -32,6 +32,11 @@ jobs:
       - name: Static configuration checks
         run: python -m compileall -q ingestion processing scripts orchestration && python -c "import yaml; yaml.safe_load(open('config/fraud_rules.yml'))"
 
+      - name: Validate Docker Compose files
+        run: |
+          docker compose -f docker/docker-compose.yml config --quiet
+          docker compose -f docker/docker-compose.yml -f docker/docker-compose.lakehouse.yml --profile lakehouse config --quiet
+
       - name: Run tests
         run: python -m pytest tests -q
 
