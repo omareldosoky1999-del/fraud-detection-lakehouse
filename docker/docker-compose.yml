@@ -7,9 +7,9 @@ version: '3.8'
 # Foundational services are always active: zookeeper, kafka, schema-registry,
 # HDFS and Spark. Optional profiles add serving, warehouse, orchestration and monitoring.
 #
-# Everything not listed here (MinIO, Iceberg/Nessie, Trino, Marquez, MLflow,
-# the old FinGuard pipeline, k8s manifests) was archived, not deleted -- see
-# archive/README.md. Re-add a service here if/when that work resumes.
+# Lakehouse services are introduced incrementally from this stable baseline.
+# Phase 1 standardizes the Spark runtime before Iceberg/MinIO/Trino are added.
+# Legacy services remain available during the HDFS -> Iceberg migration.
 
 services:
 
@@ -117,16 +117,19 @@ services:
   spark-master:
     build:
       context: ./spark
-      args: {BASE_IMAGE: bde2020/spark-master:3.0.0-hadoop3.2}
+      args:
+        BASE_IMAGE: apache/spark:3.5.9-java17-python3
+        SPARK_ROLE: master
     container_name: spark-master
     depends_on:
       namenode: {condition: service_healthy}
       datanode: {condition: service_started}
-    ports: ["8083:8083", "7077:7077", "8090:8090", "8091:8000"]
+    ports: ["8083:8080", "7077:7077", "8090:8090", "8091:8000"]
     volumes: ["..:/app"]
     environment:
-      - INIT_DAEMON_STEP=setup_spark
       - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
       - SPARK_MASTER_HOST=spark-master
       - SPARK_LOCAL_IP=spark-master
       - METRICS_PORT=8000
@@ -137,13 +140,15 @@ services:
   spark-worker:
     build:
       context: ./spark
-      args: {BASE_IMAGE: bde2020/spark-worker:3.0.0-hadoop3.2}
+      args:
+        BASE_IMAGE: apache/spark:3.5.9-java17-python3
+        SPARK_ROLE: worker
     container_name: spark-worker
     depends_on: [spark-master]
     ports: ["8082:8081"]
     volumes: ["..:/app"]
     environment:
-      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_MASTER_URL=spark://spark-master:7077
       - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
       - SPARK_LOCAL_IP=spark-worker
       - PYTHONPATH=/app
