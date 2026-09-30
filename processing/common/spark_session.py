@@ -56,7 +56,13 @@ def get_spark(app_name: str, *, enable_hive: bool = True, extra_conf=None) -> Sp
                    .config(f"spark.sql.catalog.{catalog}.scope", "PRINCIPAL_ROLE:ALL")
                    .config(f"spark.sql.catalog.{catalog}.token-refresh-enabled", "true")
                    .config("spark.redaction.regex", "(?i)credential|secret|password|token")
-                   .config(f"spark.sql.catalog.{catalog}.io-impl", "org.apache.iceberg.aws.s3.S3FileIO"))
+                   .config(
+                       f"spark.sql.catalog.{catalog}.io-impl",
+                       os.getenv(
+                           "ICEBERG_FILEIO_IMPL",
+                           "org.apache.iceberg.aws.s3.S3FileIO",
+                       ),
+                   ))
         access_key = os.getenv("ICEBERG_S3_ACCESS_KEY")
         secret_key = os.getenv("ICEBERG_S3_SECRET_KEY")
         if access_key and secret_key:
