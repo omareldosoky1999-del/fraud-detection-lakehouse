@@ -113,6 +113,8 @@ def train(
     members = {m["logical_name"]: m["registered_name"] for m in registry_members(registry_config)}
 
     spark = get_spark("fraud-ml-train", enable_hive=False)
+    train_df = None
+    validation_df = None
     try:
         events = generate(
             n,
@@ -237,8 +239,10 @@ def train(
             print(f"[MLFLOW] run_id={run.info.run_id}")
 
     finally:
-        train_df.unpersist()
-        validation_df.unpersist()
+        if train_df is not None:
+            train_df.unpersist()
+        if validation_df is not None:
+            validation_df.unpersist()
         spark.stop()
 
 
