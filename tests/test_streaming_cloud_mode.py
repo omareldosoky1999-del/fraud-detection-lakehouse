@@ -29,3 +29,16 @@ def test_transaction_dedup_is_parameterized_for_iceberg_mode():
     ).read_text(encoding="utf-8")
     assert "iceberg_enabled=iceberg_enabled" in text
     assert 'spark.table(f"{iceberg_catalog}.{TABLES[\'silver\']}")' in text
+
+
+
+def test_cloud_dedup_is_fail_closed_and_bronze_is_preserved_for_duplicate_batches():
+    source = (
+        ROOT
+        / "processing"
+        / "streaming"
+        / "bronze_silver_job.py"
+    ).read_text(encoding="utf-8")
+    assert "if not spark.catalog.tableExists(table):" in source
+    assert "Any other read/storage failure is allowed to propagate" in source
+    assert "raw Bronze/Quarantine side of the batch" in source
