@@ -83,6 +83,17 @@ with DAG(
         python_callable=_check_silver_partition_exists,
     )
 
+    validate_silver_quality = BashOperator(
+        task_id="validate_silver_quality",
+        bash_command=(
+            "docker exec spark-master python3 "
+            f"{APP_DIR}/scripts/validate_silver_quality.py "
+            "--date {{{{ ds }}}} "
+            "--path hdfs://namenode:8020/warehouse/silver/transactions "
+            f"--report {APP_DIR}/reports/dq/silver_validation_{{{{ ds }}}}.json"
+        ),
+    )
+
     build_gold = BashOperator(
         task_id="spark_submit_build_gold",
         bash_command=(
@@ -118,4 +129,4 @@ with DAG(
         ),
     )
 
-    check_silver >> build_gold >> repair_gold_tables >> evaluate
+    check_silver >> validate_silver_quality >> build_gold >> repair_gold_tables >> evaluate
