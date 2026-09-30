@@ -18,7 +18,10 @@ query:
   trino: "483"
 
 mlops:
-  tracking: "mlflow"
+  tracking: mlflow
+  mlflow: "3.16.0"
+  registry: true
+  artifact_store: "s3-compatible"
 
 lineage:
   backend: "marquez"
