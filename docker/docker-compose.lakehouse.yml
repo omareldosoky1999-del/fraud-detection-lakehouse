@@ -44,8 +44,8 @@ services:
     restart: unless-stopped
 
   rustfs:
-    # MinIO is kept as the requested local S3-compatible development adapter.
-    # Production deployments use AWS S3 / Azure ADLS Gen2 / GCS instead.
+    # RustFS is the local S3-compatible development adapter. Apache Polaris
+    # currently uses RustFS in its local quickstart; production uses cloud object storage.
     image: rustfs/rustfs:1.0.0-rc.6
     container_name: rustfs
     command: server /data --address "0.0.0.0:9000" --console-address "0.0.0.0:9001"
@@ -60,7 +60,7 @@ services:
     volumes:
       - lakehouse_rustfs_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/rustfs/health/live"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health && curl -fsS http://localhost:9001/rustfs/console/health"]
       interval: 10s
       timeout: 5s
       retries: 12
