@@ -14,15 +14,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Set up Java (required by pyspark)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -64,7 +64,7 @@ jobs:
           docker compose -f docker/docker-compose.yml -f docker/docker-compose.lakehouse.yml -f docker/docker-compose.mlflow.yml --profile lakehouse --profile mlops config --quiet
 
       - name: Helm lint
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
 
       - name: Render Kubernetes chart with production-style overrides
         run: |
