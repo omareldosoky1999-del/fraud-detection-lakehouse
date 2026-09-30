@@ -1,8 +1,8 @@
 resource "google_container_cluster" "this" {
-  name     = var.name
-  project  = var.project_id
-  location = var.location
-  network  = var.network
+  name       = var.name
+  project    = var.project_id
+  location   = var.location
+  network    = var.network
   subnetwork = var.subnetwork
 
   remove_default_node_pool = true
