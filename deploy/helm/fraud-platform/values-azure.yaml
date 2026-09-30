@@ -9,3 +9,7 @@ env:
   OPENLINEAGE_URL: https://marquez.example.internal
 runtimeSecret:
   existingSecret: fraud-platform-runtime
+serviceAccount:
+  annotations: {}
+  podLabels:
+    azure.workload.identity/use: "true"
