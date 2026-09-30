@@ -52,7 +52,7 @@ The Silver contract currently checks required identifiers/timestamps/categorical
 Great Expectations 1.23.2 currently supports Spark DataFrame data sources, which is why the validator runs directly against the existing Spark DataFrame rather than converting the financial dataset to pandas. citeturn102359search0turn102359search3
 ## MLOps / MLflow
 
-The fraud models are managed as a first-class MLOps lifecycle:
+The fraud models are managed as a first-class MLOps lifecycle with candidate-first promotion:
 
 ```text
 Spark MLlib training
@@ -60,11 +60,13 @@ Spark MLlib training
   -> PostgreSQL metadata store
   -> RustFS S3-compatible artifact store
   -> Model Registry
+  -> candidate alias
+  -> controlled production promotion
   -> production alias
   -> Spark Structured Streaming inference
 ```
 
-The registry contract is in `config/ml_models.yml`. Logistic Regression, Random Forest and GBT are registered as separate ensemble members. Streaming inference resolves their current `production` versions through MLflow aliases instead of hard-coded model files. MLflow's Tracking Server supports PostgreSQL as a backend store and remote object storage for artifacts; aliases are designed to decouple deployed inference code from a specific model version.
+The registry contract is in `config/ml_models.yml`. Logistic Regression, Random Forest and GBT are registered as separate ensemble members. Training promotes the validated ensemble to the `candidate` alias by default; production is not changed automatically. `scripts/promote_ensemble.py` verifies that all candidate members belong to the same training run and then performs the controlled candidate-to-production promotion. Streaming inference resolves only the current `production` alias instead of hard-coded model files. MLflow's Tracking Server supports PostgreSQL as a backend store and remote object storage for artifacts; aliases decouple deployed inference code from a specific model version.
 
 ### Start the Lakehouse + MLOps stack
 
@@ -133,3 +135,19 @@ The platform keeps the fraud-processing logic cloud-agnostic. `config/storage_pr
 For Kubernetes deployment, the runtime target is EKS, AKS, or GKE with Spark on Kubernetes. The Spark Operator API used by the deployment manifests is `sparkoperator.k8s.io/v1beta2`.
 
 See `docs/cloud-migration.md` and `infrastructure/terraform/README.md` for the migration boundary and infrastructure layout.
+
+
+### Promote a validated ensemble to production
+
+Training writes a candidate release first. Production promotion is an explicit control-plane action:
+
+```bash
+docker exec spark-master \
+  /opt/spark/bin/spark-submit \
+  --master spark://spark-master:7077 \
+  /app/scripts/promote_ensemble.py \
+  --tracking-uri http://mlflow:5000 \
+  --expected-run-id <MLFLOW_RUN_ID>
+```
+
+The promotion command refuses mixed candidate releases and refuses models without `validation_status=PASSED`.
