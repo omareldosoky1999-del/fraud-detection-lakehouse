@@ -20,8 +20,12 @@ def rollback(
     production_name = production or production_alias(registry_config)
 
     members = registry_members(registry_config)
+    # registry_members normally provides logical_name. Keep rollback
+    # backward-compatible with test/legacy registry entries that only expose
+    # registered_name (fraud_<logical_name>).
     expected_members = {
-        member["logical_name"]
+        member.get("logical_name")
+        or member["registered_name"].removeprefix("fraud_")
         for member in members
     }
     if expected_members != {
