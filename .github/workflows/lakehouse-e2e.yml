@@ -12,6 +12,8 @@ on:
       - "processing/common/spark_session.py"
       - "processing/lakehouse/**"
       - "scripts/lakehouse_smoke.py"
+      - "scripts/gold_iceberg_smoke.py"
+      - "processing/batch/build_gold.py"
       - ".github/workflows/lakehouse-e2e.yml"
 
 jobs:
@@ -37,6 +39,22 @@ jobs:
         run: |
           docker exec spark-master             /opt/spark/bin/spark-submit             --master spark://spark-master:7077             /app/scripts/lakehouse_smoke.py --keep
 
+      - name: Prepare Iceberg fraud decisions for Gold
+        run: |
+          docker exec spark-master \
+            /opt/spark/bin/spark-submit \
+            --master spark://spark-master:7077 \
+            /app/scripts/gold_iceberg_smoke.py
+
+      - name: Build Gold directly from Iceberg
+        run: |
+          docker exec spark-master \
+            /opt/spark/bin/spark-submit \
+            --master spark://spark-master:7077 \
+            /app/processing/batch/build_gold.py \
+            --date 2026-09-01 \
+            --lookback-days 1
+
       - name: Wait for Trino
         run: bash scripts/wait_for_trino.sh
 
@@ -44,6 +62,11 @@ jobs:
         run: |
           docker exec trino trino --server http://localhost:8080 --execute "SELECT count(*) AS rows FROM polaris.e2e_smoke.transactions WHERE status = 'SMOKE'"
           docker exec trino trino --server http://localhost:8080 --execute "SELECT transaction_id, amount FROM polaris.e2e_smoke.transactions ORDER BY transaction_id"
+
+      - name: Trino reads Gold aggregates
+        run: |
+          docker exec trino trino --server http://localhost:8080 --execute "SELECT total_txns FROM polaris.gold.daily_kpis WHERE event_date = DATE '2026-09-01'"
+          docker exec trino trino --server http://localhost:8080 --execute "SELECT client_id, txn_count, total_amount_usd, flagged_count, blocked_count FROM polaris.gold.customer_daily_risk WHERE event_date = DATE '2026-09-01' AND client_id = 77"
 
       - name: Capture logs on failure
         if: failure()
