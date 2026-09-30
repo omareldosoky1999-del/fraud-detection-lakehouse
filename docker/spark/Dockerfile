@@ -22,6 +22,7 @@ urlretrieve(f"https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-ru
 urlretrieve(f"https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/{v}/iceberg-aws-bundle-{v}.jar", f"{base}/iceberg-aws-bundle-{v}.jar")
 PY
 
+COPY core-site.xml /opt/spark/conf/core-site.xml
 COPY --chown=spark:spark entrypoint.sh /opt/spark/entrypoint.sh
 RUN chmod +x /opt/spark/entrypoint.sh
 
