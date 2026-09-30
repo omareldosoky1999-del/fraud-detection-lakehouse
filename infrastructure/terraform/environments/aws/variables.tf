@@ -1,19 +1,39 @@
-variable "region" {
-  type    = string
-  default = "eu-central-1"
+variable "enable_eks" {
+  type    = bool
+  default = false
 }
 
-variable "project_name" {
+variable "eks_cluster_name" {
   type    = string
-  default = "fraud-detection"
+  default = "fraud-detection-eks"
 }
 
-variable "environment" {
+variable "eks_kubernetes_version" {
   type    = string
-  default = "dev"
+  default = "1.34"
 }
 
-variable "bucket_name" {
-  type        = string
-  description = "Globally unique bucket for the fraud lakehouse."
+variable "eks_subnet_ids" {
+  type    = list(string)
+  default = []
+}
+
+variable "eks_node_instance_types" {
+  type    = list(string)
+  default = ["t3.large"]
+}
+
+variable "eks_node_min" {
+  type    = number
+  default = 1
+}
+
+variable "eks_node_desired" {
+  type    = number
+  default = 2
+}
+
+variable "eks_node_max" {
+  type    = number
+  default = 4
 }
