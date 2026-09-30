@@ -39,11 +39,11 @@ jobs:
 
       - name: Run Great Expectations Silver gate
         run: |
-          docker exec spark-master             python3 /app/scripts/validate_silver_quality.py             --date 2026-09-01             --path hdfs://namenode:8020/warehouse/silver/transactions             --report /app/reports/dq/e2e-silver-validation.json
+          docker exec spark-master             python3 /app/scripts/validate_silver_quality.py             --date 2026-09-01             --path hdfs://namenode:8020/warehouse/silver/transactions             --report /tmp/e2e-silver-validation.json
 
       - name: Assert validation report
         run: |
-          docker exec spark-master             python3 -c "import json; p=json.load(open('/app/reports/dq/e2e-silver-validation.json')); assert p['success'] is True; print(p)"
+          docker exec spark-master             python3 -c "import json; p=json.load(open('/tmp/e2e-silver-validation.json')); assert p['success'] is True; print(p)"
 
       - name: Capture logs on failure
         if: failure()
