@@ -160,6 +160,7 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
         ).first()["min_event_time"]
         if batch_min_event_time is None:
             silver.unpersist()
+            batch_transactions.unpersist()
             mark_committed(spark, commit_root, batch_token)
             return
 
