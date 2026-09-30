@@ -26,6 +26,9 @@ jobs:
         run: |
           docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             --profile lakehouse up -d --build
 
+      - name: Initialize HDFS Spark workspace
+        run: bash scripts/init_hdfs_dirs.sh
+
       - name: Show service status
         run: |
           docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             --profile lakehouse ps
