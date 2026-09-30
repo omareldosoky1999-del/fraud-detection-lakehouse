@@ -1,3 +1,4 @@
+services:
   spark-master:
     depends_on:
       mlflow: {condition: service_healthy}
