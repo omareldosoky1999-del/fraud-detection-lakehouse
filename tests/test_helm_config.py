@@ -16,3 +16,13 @@ def test_helm_chart_and_spark_application_contract():
     assert "kind: SparkApplication" in app
     assert "io.openlineage.spark.agent.OpenLineageSparkListener" in app
     assert "MLFLOW_MODEL_ALIAS" in values["env"]
+
+
+def test_helm_supports_immutable_image_and_runtime_secret():
+    values = yaml.safe_load((ROOT / "values.yaml").read_text(encoding="utf-8"))
+    app = (ROOT / "templates" / "sparkapplication.yaml").read_text(encoding="utf-8")
+
+    assert "immutableTag" in values["image"]
+    assert "existingSecret" in values["runtimeSecret"]
+    assert "$imageTag" in app
+    assert "secretRef" in app
