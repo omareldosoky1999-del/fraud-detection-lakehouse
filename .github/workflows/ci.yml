@@ -45,6 +45,13 @@ jobs:
       - name: Helm lint
         uses: azure/setup-helm@v4
 
+      - name: Render Kubernetes chart with production-style overrides
+        run: |
+          helm template fraud-platform deploy/helm/fraud-platform             -f deploy/helm/fraud-platform/values-aws.yaml             --set image.immutableTag=sha-ci             --set runtimeSecret.existingSecret=fraud-platform-runtime             > /tmp/fraud-platform.yaml
+          grep -q 'kind: SparkApplication' /tmp/fraud-platform.yaml
+          grep -q 'sha-ci' /tmp/fraud-platform.yaml
+          grep -q 'secretRef:' /tmp/fraud-platform.yaml
+
       - name: Lint Kubernetes chart
         run: helm lint deploy/helm/fraud-platform
 
