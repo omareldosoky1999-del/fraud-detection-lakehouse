@@ -1,0 +1,62 @@
+name: Serving E2E
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "docker/docker-compose.yml"
+      - "docker/serving/**"
+      - "processing/serving/**"
+      - ".github/workflows/serving-e2e.yml"
+
+jobs:
+  alert-consumer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start serving stack
+        run: |
+          docker compose             -f docker/docker-compose.yml             --profile serving up -d --build
+
+      - name: Wait for alert consumer
+        run: |
+          for i in $(seq 1 30); do
+            docker inspect -f '{{.State.Status}}' alert-consumer 2>/dev/null | grep -q running && exit 0
+            sleep 2
+          done
+          docker logs alert-consumer
+          exit 1
+
+      - name: Publish same alert twice
+        run: |
+          payload='{"alert_id":"e2e:txn-1001","batch_token":"e2e","transaction_id":1001,"client_id":77,"amount_usd":250.0,"currency":"USD","decision":"BLOCK","risk_score":95,"matched_rules":["HIGH_AMOUNT"],"event_time":"2026-09-01T10:00:00Z"}'
+          printf '%s
+%s
+' "$payload" "$payload" |             docker exec -i kafka             kafka-console-producer --bootstrap-server kafka:9092 --topic fraud.alerts
+
+      - name: Assert SQLite deduplication
+        run: |
+          for i in $(seq 1 20); do
+            count=$(docker exec alert-consumer               python -c "import sqlite3; c=sqlite3.connect('/data/alerts.db'); print(c.execute('select count(*) from alerts').fetchone()[0])")
+            echo "stored_alerts=$count"
+            [ "$count" -eq 1 ] && exit 0
+            sleep 2
+          done
+          docker logs alert-consumer
+          exit 1
+
+      - name: Capture logs on failure
+        if: failure()
+        run: |
+          docker compose -f docker/docker-compose.yml --profile serving logs --no-color --tail=500
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/docker-compose.yml --profile serving down -v
