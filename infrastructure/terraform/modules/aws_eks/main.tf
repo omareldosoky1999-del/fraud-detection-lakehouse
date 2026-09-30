@@ -65,6 +65,13 @@ resource "aws_iam_role_policy_attachment" "worker" {
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/${each.value}"
 }
 
+resource "aws_eks_addon" "pod_identity_agent" {
+  count        = var.enable_pod_identity_agent ? 1 : 0
+  cluster_name = aws_eks_cluster.this.name
+  addon_name   = "eks-pod-identity-agent"
+  most_recent  = true
+  depends_on   = [aws_eks_cluster.this]
+}
 resource "aws_eks_node_group" "this" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "${var.cluster_name}-ng"
