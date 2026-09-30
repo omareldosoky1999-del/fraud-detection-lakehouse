@@ -55,3 +55,12 @@ def test_trino_catalog_is_environment_driven():
     assert "${ENV:AWS_ACCESS_KEY_ID}" in text
     assert "rustfsadmin" not in text
     assert "root:s3cr3t" not in text
+
+
+def test_polaris_setup_has_admin_oauth_credentials():
+    data = yaml.safe_load(
+        (Path(__file__).parents[1] / "docker" / "docker-compose.lakehouse.yml").read_text(encoding="utf-8")
+    )
+    env = data["services"]["polaris-setup"]["environment"]
+    assert env["CLIENT_ID"] == "root"
+    assert env["CLIENT_SECRET"] == "s3cr3t"
