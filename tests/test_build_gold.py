@@ -54,3 +54,14 @@ def test_daily_kpis_empty_day_does_not_crash(spark):
     df = spark.createDataFrame([decision_row()]).filter("transaction_id < 0")
     out = build_daily_kpis(df).collect()[0]
     assert out.total_txns == 0
+
+
+def test_build_gold_contains_iceberg_dual_write():
+    source = (
+        ( __import__("pathlib").Path(__file__).parents[1] / "processing" / "batch" / "build_gold.py")
+        .read_text(encoding="utf-8")
+    )
+    assert "ICEBERG_ENABLED" in source
+    assert "write_gold_tables" in source
+    assert 'customer_daily_risk=customer_risk' in source
+    assert 'daily_kpis=kpis' in source
