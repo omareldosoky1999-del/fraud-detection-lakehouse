@@ -8,11 +8,15 @@ env:
   POLARIS_TOKEN_URI: https://polaris.example.internal/api/catalog/v1/oauth/tokens
   MLFLOW_TRACKING_URI: https://mlflow.example.internal
   OPENLINEAGE_URL: https://marquez.example.internal
+
 runtimeSecret:
   existingSecret: fraud-platform-runtime
+
 serviceAccount:
   annotations: {}
-  podLabels: {}
+  podLabels:
+    iam.gke.io/gcp-service-account: fraud-spark
+    iam.gke.io/gke-metadata-server-enabled: "true"
 
 externalSecrets:
   enabled: false
