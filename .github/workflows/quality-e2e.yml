@@ -12,6 +12,7 @@ on:
       - "docker/spark/**"
       - "processing/quality/**"
       - "scripts/gx_silver_smoke.py"
+      - "scripts/init_hdfs_dirs.sh"
       - "scripts/validate_silver_quality.py"
       - "tests/test_gx_validation.py"
       - "config/platform.yml"
