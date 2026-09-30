@@ -18,11 +18,25 @@ from pyspark.sql import functions as F
 
 from ingestion.generator.transaction_generator import generate
 from processing.common.spark_session import get_spark
+from processing.features.fraud_features import add_fraud_features
 from processing.ml.registry import load_registry_config, production_alias, registry_members
 from processing.streaming.transform import to_silver
 
 CATEGORICAL = ["txn_type", "status", "currency", "country_src", "country_dest"]
-NUMERIC = ["amount_usd", "card_id", "device_id", "client_id"]
+NUMERIC = [
+    "amount_usd",
+    "card_id",
+    "device_id",
+    "client_id",
+    "txn_count_5m",
+    "amount_sum_1h",
+    "avg_amount_prior_30",
+    "stddev_amount_prior_30",
+    "seconds_since_prev_txn",
+    "device_new_30d",
+    "country_changed",
+    "amount_to_prior_avg",
+]
 
 
 def _pipeline(estimator):
@@ -118,7 +132,9 @@ def train(
         raw = spark.createDataFrame(
             [{**e.rec, "label": float(e.is_fraud)} for e in events]
         )
-        silver = to_silver(raw).withColumn("label", F.col("label").cast("double"))
+        silver = add_fraud_features(
+            to_silver(raw).withColumn("label", F.col("label").cast("double"))
+        )
 
         cutoff = (
             silver.select(
