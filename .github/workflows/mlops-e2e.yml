@@ -1,0 +1,53 @@
+name: MLOps E2E
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "docker/docker-compose.yml"
+      - "docker/docker-compose.lakehouse.yml"
+      - "docker/docker-compose.mlflow.yml"
+      - "docker/mlflow/**"
+      - "processing/common/spark_session.py"
+      - "processing/ml/**"
+      - "scripts/mlflow_smoke.py"
+      - "config/ml_models.yml"
+      - ".github/workflows/mlops-e2e.yml"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Lakehouse and MLOps stack
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             -f docker/docker-compose.mlflow.yml             --profile lakehouse --profile mlops up -d --build
+
+      - name: Show service status
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             -f docker/docker-compose.mlflow.yml             --profile lakehouse --profile mlops ps
+
+      - name: Spark MLlib -> MLflow Registry smoke test
+        run: |
+          docker exec spark-master             /opt/spark/bin/spark-submit             --master spark://spark-master:7077             /app/scripts/mlflow_smoke.py
+
+      - name: Verify MLflow HTTP health
+        run: |
+          docker exec mlflow             python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:5000/health', timeout=5).read().decode())"
+
+      - name: Capture logs on failure
+        if: failure()
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             -f docker/docker-compose.mlflow.yml             --profile lakehouse --profile mlops logs --no-color --tail=500
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             -f docker/docker-compose.mlflow.yml             --profile lakehouse --profile mlops down -v
