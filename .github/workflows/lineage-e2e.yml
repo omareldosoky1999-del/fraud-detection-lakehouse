@@ -29,6 +29,9 @@ jobs:
         run: |
           docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lineage.yml             --profile lineage --profile orchestration up -d --build
 
+      - name: Initialize HDFS Spark workspace
+        run: bash scripts/init_hdfs_dirs.sh
+
       - name: Show service status
         run: |
           docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lineage.yml             --profile lineage --profile orchestration ps
