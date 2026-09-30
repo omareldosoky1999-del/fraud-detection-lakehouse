@@ -289,8 +289,23 @@ services:
     ports: ["9091:9090"]
     volumes:
       - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ../monitoring/rules:/etc/prometheus/rules:ro
       - prometheus-data:/prometheus
-    depends_on: [kafka-exporter]
+    depends_on: [kafka-exporter, alertmanager]
+    networks: [fraud-net]
+    profiles: [monitoring]
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.29.0
+    container_name: alertmanager
+    ports: ["9093:9093"]
+    volumes:
+      - ../monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
     networks: [fraud-net]
     profiles: [monitoring]
     restart: unless-stopped
