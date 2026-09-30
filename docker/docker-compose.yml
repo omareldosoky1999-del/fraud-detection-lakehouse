@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Usage:
 #   docker compose -f docker/docker-compose.yml up -d
 #   docker compose -f docker/docker-compose.yml --profile serving --profile warehouse --profile orchestration --profile monitoring up -d
