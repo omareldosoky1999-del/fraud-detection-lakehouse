@@ -9,6 +9,7 @@ FROM ${BASE_IMAGE}
 
 ARG SPARK_ROLE=worker
 ARG ICEBERG_VERSION=1.11.0
+ARG OPENLINEAGE_VERSION=1.53.0
 
 USER root
 COPY requirements-spark.txt /tmp/requirements-spark.txt
@@ -20,6 +21,12 @@ v = "${ICEBERG_VERSION}"
 base = "/opt/spark/jars"
 urlretrieve(f"https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_2.12/{v}/iceberg-spark-runtime-3.5_2.12-{v}.jar", f"{base}/iceberg-spark-runtime-3.5_2.12-{v}.jar")
 urlretrieve(f"https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/{v}/iceberg-aws-bundle-{v}.jar", f"{base}/iceberg-aws-bundle-{v}.jar")
+
+ol = "${OPENLINEAGE_VERSION}"
+urlretrieve(
+    f"https://repo1.maven.org/maven2/io/openlineage/openlineage-spark_2.12/{ol}/openlineage-spark_2.12-{ol}.jar",
+    f"{base}/openlineage-spark_2.12-{ol}.jar",
+)
 PY
 
 COPY core-site.xml /opt/spark/conf/core-site.xml
