@@ -23,3 +23,11 @@ def test_alert_rules_have_explicit_severity_and_service():
     for rule in rules:
         assert rule["labels"]["severity"] in {"warning", "critical"}
         assert rule["labels"]["service"]
+
+def test_alertmanager_has_persistent_storage():
+    data = yaml.safe_load(
+        (ROOT / "docker" / "docker-compose.yml").read_text(encoding="utf-8")
+    )
+    text = (ROOT / "docker" / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "alertmanager-data:/alertmanager" in text
+    assert "alertmanager" in data["services"]
