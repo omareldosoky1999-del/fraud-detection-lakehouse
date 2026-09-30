@@ -57,6 +57,7 @@ def _register_spark_model(
         spark_model=model,
         artifact_path=artifact_path,
         registered_model_name=registered_name,
+        dfs_tmpdir="/tmp/mlflow-spark-tmp",
     )
 
     versions = client.search_model_versions(f"name='{registered_name}'")
