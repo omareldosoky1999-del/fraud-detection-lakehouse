@@ -17,3 +17,12 @@ def test_compose_has_no_latest_and_persistent_state():
     assert "alert-consumer" in data["services"]
     assert "alerts-data:/data" in text
     assert "fraud.alerts" in data["services"]["alert-consumer"]["command"]
+
+def test_schema_registry_enforces_backward_compatibility():
+    data = yaml.safe_load(
+        (Path(__file__).parents[1] / "docker" / "docker-compose.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    env = data["services"]["schema-registry"]["environment"]
+    assert env["SCHEMA_REGISTRY_AVRO_COMPATIBILITY_LEVEL"] == "BACKWARD"
