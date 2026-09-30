@@ -19,7 +19,7 @@ from pyspark.sql import functions as F
 from ingestion.generator.transaction_generator import generate
 from processing.common.spark_session import get_spark
 from processing.features.fraud_features import add_fraud_features
-from processing.ml.registry import load_registry_config, production_alias, registry_members
+from processing.ml.registry import candidate_alias, load_registry_config, registry_members
 from processing.streaming.transform import to_silver
 
 CATEGORICAL = ["txn_type", "status", "currency", "country_src", "country_dest"]
@@ -114,7 +114,11 @@ def train(
     mlflow.set_experiment(experiment)
 
     registry = load_registry_config(registry_config)
-    alias = promote_alias or os.getenv("MLFLOW_PROMOTE_ALIAS", registry.get("alias", "production"))
+    alias = (
+        promote_alias
+        or os.getenv("MLFLOW_PROMOTE_ALIAS")
+        or candidate_alias(registry_config)
+    )
     min_validation_auc = float(
         os.getenv(
             "MLFLOW_MIN_VALIDATION_AUC",
@@ -324,7 +328,7 @@ def train(
                     "min_validation_auc": min_validation_auc,
                     "registered_name": registered_name,
                     "registry_version": str(version),
-                    "production_alias": alias,
+                    "promotion_alias": alias,
                 }
 
                 print(
@@ -345,7 +349,8 @@ def train(
 
             metrics["ensemble_release"] = {
                 "run_id": run.info.run_id,
-                "alias": alias,
+                "promotion_alias": alias,
+                "production_alias": registry.get("production_alias", "production"),
                 "members": registered_versions,
                 "promotion_policy": (
                     "coordinated_alias_promotion_after_full_registration_and_validation_gate"
@@ -409,7 +414,7 @@ def main(argv=None):
     parser.add_argument(
         "--promote-alias",
         default=os.getenv("MLFLOW_PROMOTE_ALIAS"),
-        help="Alias assigned to each successfully validated ensemble member.",
+        help="Alias assigned after validation; defaults to the candidate alias, not production.",
     )
     parser.add_argument(
         "--ml-threshold",
