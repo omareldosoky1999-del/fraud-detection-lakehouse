@@ -45,9 +45,11 @@ jobs:
 
       - name: Wait for HBase readiness
         run: |
-          for i in $(seq 1 40); do
-            docker exec hbase bash -lc "echo 'status' | hbase shell -n >/dev/null 2>&1" && exit 0
-            sleep 3
+          for i in $(seq 1 60); do
+            if docker exec hbase bash -lc "curl -fsS http://localhost:16010/master-status >/dev/null 2>&1 && echo 'status' | hbase shell -n >/dev/null 2>&1"; then
+              exit 0
+            fi
+            sleep 2
           done
           docker logs hbase
           exit 1
