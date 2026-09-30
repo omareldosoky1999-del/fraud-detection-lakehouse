@@ -35,3 +35,17 @@ module "gke" {
   node_count   = var.gke_node_count
   machine_type = var.gke_machine_type
 }
+
+module "workload_identity" {
+  count = var.enable_gke ? 1 : 0
+
+  source = "../../modules/gcp_workload_identity"
+
+  name            = var.workload_service_account_name
+  project_id      = var.project_id
+  bucket_name     = module.object_storage.bucket_name
+  namespace       = var.workload_namespace
+  service_account = var.workload_service_account
+
+  depends_on = [module.gke]
+}
