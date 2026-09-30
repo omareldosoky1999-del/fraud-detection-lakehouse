@@ -11,11 +11,14 @@ on:
       - "docker/docker-compose.yml"
       - "docker/spark/**"
       - "processing/quality/**"
+      - "config/quality/**"
+      - "config/platform.yml"
+      - "requirements-dev.txt"
+      - "docker/spark/**"
       - "scripts/gx_silver_smoke.py"
       - "scripts/init_hdfs_dirs.sh"
       - "scripts/validate_silver_quality.py"
       - "tests/test_gx_validation.py"
-      - "config/platform.yml"
       - ".github/workflows/quality-e2e.yml"
 
 jobs:
