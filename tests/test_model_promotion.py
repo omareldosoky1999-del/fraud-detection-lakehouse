@@ -29,3 +29,11 @@ def test_retraining_dag_promotes_candidate_only():
     )
     assert "--promote-alias candidate" in dag
     assert "--promote-alias production" not in dag
+
+
+def test_training_records_reproducibility_metadata():
+    train = (ROOT / "processing" / "ml" / "train.py").read_text(encoding="utf-8")
+    assert "_dataset_signature" in train
+    assert "dataset_signature" in train
+    assert "feature_contract" in train
+    assert "GITHUB_SHA" in train
