@@ -29,3 +29,16 @@ def test_cloud_deploy_requires_explicit_non_aws_identity_reference():
     assert 'test -n "$IDENTITY_REF"' in text
     assert "serviceAccount.annotations.azure" in text
     assert "serviceAccount.annotations.iam" in text
+
+
+
+def test_cloud_values_disable_local_hdfs_and_hbase_dependencies():
+    import yaml
+
+    root = ROOT / "deploy" / "helm" / "fraud-platform"
+    for env in ["aws", "azure", "gcp"]:
+        data = yaml.safe_load(
+            (root / f"values-{env}.yaml").read_text(encoding="utf-8")
+        )
+        assert data["env"]["LEGACY_HDFS_ENABLED"] == "false"
+        assert data["env"]["HBASE_HOST"] == ""
