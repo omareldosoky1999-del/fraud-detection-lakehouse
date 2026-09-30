@@ -30,4 +30,4 @@ HDFS remains the legacy serving path while Spark writes are introduced into Iceb
 
 ## Production storage
 
-MinIO is the local S3-compatible adapter. Cloud environments will map the same Iceberg/Polaris interfaces to AWS S3, Azure ADLS Gen2 or Google Cloud Storage through Terraform and environment-specific credentials.
+RustFS is the local S3-compatible adapter. Cloud environments will map the same Iceberg/Polaris interfaces to AWS S3, Azure ADLS Gen2 or Google Cloud Storage through Terraform and environment-specific credentials.
