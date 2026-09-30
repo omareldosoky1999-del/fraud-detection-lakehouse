@@ -1,0 +1,80 @@
+name: Deploy Spark Fraud Platform
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target cloud environment
+        required: true
+        type: choice
+        options:
+          - aws
+          - azure
+          - gcp
+      image_tag:
+        description: Immutable GHCR tag, for example sha-<commit>
+        required: true
+        type: string
+      namespace:
+        description: Kubernetes namespace
+        required: true
+        default: fraud-platform
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+
+      - name: Configure kubeconfig
+        shell: bash
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          set -euo pipefail
+          test -n "$KUBE_CONFIG_DATA"
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$KUBE_CONFIG_DATA" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl cluster-info
+
+      - name: Resolve cloud-specific Helm values
+        id: values
+        shell: bash
+        run: |
+          case "${{ inputs.environment }}" in
+            aws|azure|gcp)
+              echo "file=deploy/helm/fraud-platform/values-${{ inputs.environment }}.yaml" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unsupported environment" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Render release manifest
+        run: |
+          helm template fraud-platform deploy/helm/fraud-platform             --namespace "${{ inputs.namespace }}"             -f "${{ steps.values.outputs.file }}"             --set-string image.immutableTag="${{ inputs.image_tag }}"             > /tmp/fraud-platform.yaml
+          grep -q 'kind: SparkApplication' /tmp/fraud-platform.yaml
+          grep -q '${{ inputs.image_tag }}' /tmp/fraud-platform.yaml
+          ! grep -q ':latest' /tmp/fraud-platform.yaml
+
+      - name: Deploy with Helm atomic upgrade
+        run: |
+          helm upgrade --install fraud-platform deploy/helm/fraud-platform             --namespace "${{ inputs.namespace }}"             --create-namespace             -f "${{ steps.values.outputs.file }}"             --set-string image.immutableTag="${{ inputs.image_tag }}"             --wait             --atomic             --timeout 10m
+
+      - name: Show SparkApplication status
+        run: |
+          kubectl get sparkapplication fraud-platform             -n "${{ inputs.namespace }}" -o yaml
