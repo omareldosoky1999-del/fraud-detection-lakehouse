@@ -127,13 +127,14 @@ services:
     ports: ["8083:8080", "7077:7077", "8090:8090", "8091:8000"]
     volumes: ["..:/app"]
     environment:
-      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
-      - SPARK_MASTER_PORT=7077
-      - SPARK_MASTER_WEBUI_PORT=8080
-      - SPARK_MASTER_HOST=spark-master
-      - SPARK_LOCAL_IP=spark-master
-      - METRICS_PORT=8000
-      - PYTHONPATH=/app
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+      SPARK_MASTER_PORT: "7077"
+      SPARK_MASTER_WEBUI_PORT: "8080"
+      SPARK_MASTER_HOST: spark-master
+      SPARK_LOCAL_IP: spark-master
+      METRICS_PORT: "8000"
+      PYTHONPATH: /app
+      HADOOP_CONF_DIR: /opt/spark/conf
     networks: [fraud-net]
     restart: unless-stopped
 
@@ -148,10 +149,11 @@ services:
     ports: ["8082:8081"]
     volumes: ["..:/app"]
     environment:
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
-      - SPARK_LOCAL_IP=spark-worker
-      - PYTHONPATH=/app
+      SPARK_MASTER_URL: spark://spark-master:7077
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+      SPARK_LOCAL_IP: spark-worker
+      PYTHONPATH: /app
+      HADOOP_CONF_DIR: /opt/spark/conf
     networks: [fraud-net]
     restart: unless-stopped
 
