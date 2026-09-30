@@ -42,3 +42,11 @@ def test_cloud_values_disable_local_hdfs_and_hbase_dependencies():
         )
         assert data["env"]["LEGACY_HDFS_ENABLED"] == "false"
         assert data["env"]["HBASE_HOST"] == ""
+
+
+def test_airflow_gold_dag_is_iceberg_first():
+    text = (ROOT / "orchestration" / "dags" / "fraud_gold_dag.py").read_text(encoding="utf-8")
+    assert "--iceberg-catalog polaris" in text
+    assert "--iceberg-table silver.transactions" in text
+    assert "processing/batch/build_gold.py" in text
+    assert "LEGACY_HDFS_ORCHESTRATION" in text
