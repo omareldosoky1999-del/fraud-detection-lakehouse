@@ -11,7 +11,7 @@ Spark 3.5.9
             |       |
             |       +--> PostgreSQL metadata
             |
-            +--> MinIO S3-compatible storage (local only)
+            +--> RustFS S3-compatible storage (local only)
                     |
                     +--> Trino 483 SQL
 ```
