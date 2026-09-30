@@ -5,6 +5,11 @@ resource "azurerm_kubernetes_cluster" "this" {
   dns_prefix          = "${var.name}-dns"
   kubernetes_version  = var.kubernetes_version
 
+  node_provisioning_profile {
+    mode               = "Manual"
+    default_node_pools = "Auto"
+  }
+
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
 
