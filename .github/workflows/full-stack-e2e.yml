@@ -12,6 +12,17 @@ on:
   push:
     paths:
       - ".github/workflows/full-stack-e2e.yml"
+      - "docker/docker-compose.yml"
+      - "docker/docker-compose.lakehouse.yml"
+      - "docker/docker-compose.mlflow.yml"
+      - "docker/spark/**"
+      - "docker/serving/**"
+      - "processing/streaming/**"
+      - "processing/ml/**"
+      - "processing/serving/**"
+      - "processing/lakehouse/**"
+      - "warehouse/trino/**"
+      - "scripts/**"
 
 jobs:
   full-stack:
