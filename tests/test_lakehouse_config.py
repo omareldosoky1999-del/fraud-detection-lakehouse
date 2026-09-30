@@ -36,3 +36,11 @@ def test_iceberg_partition_contract_avoids_micro_batch_partition_explosion():
 
     for columns in PARTITIONS.values():
         assert "batch_token" not in columns
+
+
+def test_spark_session_does_not_ship_polaris_secret_defaults():
+    source = (
+        ROOT / "processing" / "common" / "spark_session.py"
+    ).read_text(encoding="utf-8")
+    assert 'os.getenv("POLARIS_CREDENTIAL", "root:s3cr3t")' not in source
+    assert 'os.environ["POLARIS_CREDENTIAL"]' in source
