@@ -7,7 +7,7 @@ from pyspark.sql import functions as F
 from processing.common.spark_session import get_spark
 
 CATALOG = "polaris"
-DECISIONS = f"{CATALOG}.gold.fraud_decisions"
+DECISIONS = "polaris.gold.fraud_decisions"
 TEST_DATE = "2026-09-01"
 
 
