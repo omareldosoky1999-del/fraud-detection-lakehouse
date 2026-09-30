@@ -259,8 +259,10 @@ def train(
                 "run_id": run.info.run_id,
                 "alias": alias,
                 "members": registered_versions,
-                "promotion_policy": "coordinated_alias_promotion_after_full_registration_and_validation_gate",
-            "min_validation_auc": min_validation_auc,
+                "promotion_policy": (
+                    "coordinated_alias_promotion_after_full_registration_and_validation_gate"
+                ),
+                "min_validation_auc": min_validation_auc,
             }
 
             manifest_path = out / "ensemble_manifest.json"
