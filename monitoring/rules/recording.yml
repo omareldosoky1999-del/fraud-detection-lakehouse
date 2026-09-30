@@ -1,0 +1,18 @@
+groups:
+  - name: fraud-platform-recording
+    interval: 30s
+    rules:
+      - record: fraud_decision_rate_5m
+        expr: sum(rate(fraud_decisions_total[5m]))
+
+      - record: fraud_alert_rate_5m
+        expr: sum(rate(fraud_alerts_total[5m]))
+
+      - record: fraud_quarantine_rate_5m
+        expr: sum(rate(fraud_quarantined_total[5m]))
+
+      - record: fraud_feature_row_rate_5m
+        expr: sum(rate(fraud_feature_rows_total[5m]))
+
+      - record: fraud_batch_duration_p95_5m
+        expr: histogram_quantile(0.95, sum(rate(fraud_batch_duration_seconds_bucket[5m])) by (le))
