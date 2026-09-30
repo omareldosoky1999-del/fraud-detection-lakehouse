@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  namespace: {{ .Values.environment.namespace }}
+  labels:
+    app.kubernetes.io/name: fraud-platform
+    app.kubernetes.io/component: configuration
+data:
+  platform-environment: {{ .Values.environment.name | quote }}
+  storage-profile: {{ .Values.environment.name | quote }}
