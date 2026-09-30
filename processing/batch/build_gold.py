@@ -66,7 +66,7 @@ def _read_decisions(
 ) -> DataFrame:
     if iceberg_enabled:
         return spark.table(
-            f"{iceberg_catalog}.{TABLES['decisions']}"
+            f"{iceberg_catalog}.{TABLES["decisions"]}"
         )
     return spark.read.parquet(decisions_path)
 
