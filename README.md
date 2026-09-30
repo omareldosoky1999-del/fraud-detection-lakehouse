@@ -42,6 +42,14 @@ The shared feature builder lives in `processing/features/fraud_features.py` and 
 
 Streaming feature batches are persisted in the Iceberg table `features.transaction_features`, making model inputs auditable and queryable through Trino.
 
+
+## Data Quality / Great Expectations
+
+The streaming path still performs immediate schema/data-quality checks and quarantines invalid events. Great Expectations adds an independent batch-level contract on the persisted Silver partition before the daily Gold build. This keeps the low-latency fraud decision path lightweight while giving downstream analytics a declarative validation gate.
+
+The Silver contract currently checks required identifiers/timestamps/categorical fields and prevents negative USD amounts. It is implemented in `processing/quality/gx_validation.py`, executed by `scripts/validate_silver_quality.py`, and enforced by the `fraud_gold_daily` Airflow DAG.
+
+Great Expectations 1.23.2 currently supports Spark DataFrame data sources, which is why the validator runs directly against the existing Spark DataFrame rather than converting the financial dataset to pandas. citeturn102359search0turn102359search3
 ## MLOps / MLflow
 
 The fraud models are managed as a first-class MLOps lifecycle:
