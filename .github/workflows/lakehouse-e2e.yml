@@ -1,0 +1,46 @@
+name: Lakehouse E2E
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "docker/**"
+      - "processing/common/spark_session.py"
+      - "processing/lakehouse/**"
+      - "scripts/lakehouse_smoke.py"
+      - ".github/workflows/lakehouse-e2e.yml"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Lakehouse stack
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             --profile lakehouse up -d --build
+
+      - name: Show service status
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             --profile lakehouse ps
+
+      - name: Spark -> Polaris -> MinIO smoke test
+        run: |
+          docker exec spark-master             /opt/spark/bin/spark-submit             --master spark://spark-master:7077             /app/scripts/lakehouse_smoke.py --keep
+
+      - name: Trino reads the Iceberg table
+        run: |
+          docker exec trino trino             --execute "SELECT count(*) AS rows FROM polaris.e2e_smoke.transactions WHERE status = 'SMOKE'"
+          docker exec trino trino             --execute "SELECT transaction_id, amount FROM polaris.e2e_smoke.transactions ORDER BY transaction_id"
+
+      - name: Capture logs on failure
+        if: failure()
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             --profile lakehouse logs --no-color --tail=400
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             --profile lakehouse down -v
