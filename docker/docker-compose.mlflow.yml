@@ -91,12 +91,8 @@ services:
       AWS_SECRET_ACCESS_KEY: rustfsadmin
       AWS_DEFAULT_REGION: us-east-1
       MLFLOW_S3_ENDPOINT_URL: http://rustfs:9000
-      # MLflow 3.5+ Host validation must stay enabled.
-      MLFLOW_SERVER_ALLOWED_HOSTS: "localhost,localhost:*,mlflow,mlflow:5000,127.0.0.1,127.0.0.1:*"
-      MLFLOW_SERVER_CORS_ALLOWED_ORIGINS: "http://localhost:*"
       MLFLOW_S3_IGNORE_TLS: "true"
-      # MLflow 3.5+ validates Host headers; allow the internal Docker service
-      # name used by Spark while keeping validation enabled.
+      # MLflow 3.5+ Host validation remains enabled.
       MLFLOW_SERVER_ALLOWED_HOSTS: "localhost,localhost:*,mlflow,mlflow:5000,127.0.0.1,127.0.0.1:*"
       MLFLOW_SERVER_CORS_ALLOWED_ORIGINS: "http://localhost:*"
     command:
@@ -132,3 +128,4 @@ services:
 volumes:
   mlflow_postgres_data:
   mlflow_data:
+  mlflow_rustfs_data:
