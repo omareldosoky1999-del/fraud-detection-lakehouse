@@ -20,6 +20,11 @@ on:
         required: true
         default: fraud-platform
         type: string
+      workload_identity_ref:
+        description: Terraform output used by Azure/GCP workload identity (leave empty for AWS Pod Identity)
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -46,7 +51,7 @@ jobs:
           set -euo pipefail
           test -n "$KUBE_CONFIG_DATA"
           mkdir -p "$HOME/.kube"
-          printf '%s' "$KUBE_CONFIG_DATA" | base64 --decode > "$HOME/.kube/config"
+          printf "%s" "$KUBE_CONFIG_DATA" | base64 --decode > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
           kubectl cluster-info
 
@@ -64,17 +69,53 @@ jobs:
               ;;
           esac
 
+      - name: Build workload identity Helm overrides
+        id: identity
+        shell: bash
+        env:
+          IDENTITY_REF: ${{ inputs.workload_identity_ref }}
+        run: |
+          set -euo pipefail
+          case "${{ inputs.environment }}" in
+            aws)
+              # AWS uses EKS Pod Identity; no ServiceAccount annotation is required.
+              echo "args=" >> "$GITHUB_OUTPUT"
+              ;;
+            azure)
+              test -n "$IDENTITY_REF"
+              printf "args=--set-string serviceAccount.annotations.azure\.workload\.identity/client-id=%s\n" "$IDENTITY_REF" >> "$GITHUB_OUTPUT"
+              ;;
+            gcp)
+              test -n "$IDENTITY_REF"
+              printf "args=--set-string serviceAccount.annotations.iam\.gke\.io/gcp-service-account=%s\n" "$IDENTITY_REF" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       - name: Render release manifest
         run: |
-          helm template fraud-platform deploy/helm/fraud-platform             --namespace "${{ inputs.namespace }}"             -f "${{ steps.values.outputs.file }}"             --set-string image.immutableTag="${{ inputs.image_tag }}"             > /tmp/fraud-platform.yaml
-          grep -q 'kind: SparkApplication' /tmp/fraud-platform.yaml
-          grep -q '${{ inputs.image_tag }}' /tmp/fraud-platform.yaml
-          ! grep -q ':latest' /tmp/fraud-platform.yaml
+          helm template fraud-platform deploy/helm/fraud-platform \
+            --namespace "${{ inputs.namespace }}" \
+            -f "${{ steps.values.outputs.file }}" \
+            --set-string image.immutableTag="${{ inputs.image_tag }}" \
+            ${{ steps.identity.outputs.args }} \
+            > /tmp/fraud-platform.yaml
+          grep -q "kind: SparkApplication" /tmp/fraud-platform.yaml
+          grep -q "${{ inputs.image_tag }}" /tmp/fraud-platform.yaml
+          ! grep -q ":latest" /tmp/fraud-platform.yaml
 
       - name: Deploy with Helm atomic upgrade
         run: |
-          helm upgrade --install fraud-platform deploy/helm/fraud-platform             --namespace "${{ inputs.namespace }}"             --create-namespace             -f "${{ steps.values.outputs.file }}"             --set-string image.immutableTag="${{ inputs.image_tag }}"             --wait             --atomic             --timeout 10m
+          helm upgrade --install fraud-platform deploy/helm/fraud-platform \
+            --namespace "${{ inputs.namespace }}" \
+            --create-namespace \
+            -f "${{ steps.values.outputs.file }}" \
+            --set-string image.immutableTag="${{ inputs.image_tag }}" \
+            ${{ steps.identity.outputs.args }} \
+            --wait \
+            --atomic \
+            --timeout 10m
 
       - name: Show SparkApplication status
         run: |
-          kubectl get sparkapplication fraud-platform             -n "${{ inputs.namespace }}" -o yaml
+          kubectl get sparkapplication fraud-platform \
+            -n "${{ inputs.namespace }}" -o yaml
