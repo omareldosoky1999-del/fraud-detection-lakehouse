@@ -71,8 +71,7 @@ def _filter_transactions_already_committed(
 ) -> DataFrame:
     """Prevent duplicate transaction_ids after a Kafka checkpoint reset.
 
-    Missing Silver storage is treated as the first-ever write. Any other
-    read/storage failure is allowed to propagate so a banking workload cannot
+    Missing Silver storage is treated as the first-ever write. Any other read/storage failure is allowed to propagate so a banking workload cannot
     silently disable duplicate protection during an outage.
     """
     if silver_df.take(1) == []:
