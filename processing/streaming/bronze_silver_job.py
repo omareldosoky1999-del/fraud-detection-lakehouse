@@ -83,7 +83,7 @@ def _filter_transactions_already_committed(
         if not spark.catalog.tableExists(table):
             return silver_df
         existing = (
-            spark.table(table)
+            spark.table(f"{iceberg_catalog}.{TABLES['silver']}")
             .filter(F.col("batch_token") != F.lit(batch_token))
             .select("transaction_id")
             .dropDuplicates()
