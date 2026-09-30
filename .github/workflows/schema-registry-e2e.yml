@@ -1,0 +1,59 @@
+name: Schema Registry E2E
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "docker/docker-compose.yml"
+      - "docker/kafka/**"
+      - "ingestion/schema/**"
+      - "ingestion/generator/**"
+      - "scripts/schema_registry_smoke.py"
+      - "processing/streaming/decode.py"
+      - "tests/test_decode.py"
+      - ".github/workflows/schema-registry-e2e.yml"
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Kafka and Schema Registry
+        run: |
+          docker compose -f docker/docker-compose.yml up -d kafka schema-registry
+
+      - name: Wait for Schema Registry
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8081/subjects >/dev/null && exit 0
+            sleep 2
+          done
+          docker compose -f docker/docker-compose.yml logs --no-color schema-registry kafka
+          exit 1
+
+      - name: Create ingestion topic
+        run: |
+          docker exec kafka bash /kafka-scripts/create-topics.sh kafka:9092
+
+      - name: Install producer SDK
+        run: python -m pip install --disable-pip-version-check 'confluent-kafka[avro,schemaregistry]>=2.3'
+
+      - name: Validate registry and Confluent header
+        env:
+          SCHEMA_REGISTRY_URL: http://localhost:8081
+        run: python scripts/schema_registry_smoke.py
+
+      - name: Capture logs on failure
+        if: failure()
+        run: docker compose -f docker/docker-compose.yml logs --no-color --tail=500
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/docker-compose.yml down -v
