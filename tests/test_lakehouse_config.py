@@ -14,6 +14,8 @@ def test_lakehouse_overlay_is_pinned_and_wired():
     text = catalog.read_text(encoding="utf-8")
     assert "iceberg.catalog.type=rest" in text
     assert "iceberg.rest-catalog.uri=http://polaris:8181/api/catalog" in text
+    assert "fs.native-s3.enabled=true" in text
+    assert "fs.s3.enabled=true" not in text
     assert "s3.endpoint=http://rustfs:9000" in text
     assert "s3.aws-access-key=rustfsadmin" in text
     assert "s3.aws-secret-key=rustfsadmin" in text
