@@ -26,5 +26,5 @@ def test_extract_confluent_schema_id_and_magic_byte(spark):
     row = extract_confluent_metadata(df).collect()[0]
     assert row.kafka_confluent_magic == "00"
     assert row.kafka_schema_id == 42
-    assert row.kafka_partition == 3
-    assert row.kafka_offset == 91
+    assert row.partition == 3
+    assert row.offset == 91
