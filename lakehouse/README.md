@@ -22,7 +22,7 @@ Spark 3.5.9
 docker compose -f docker/docker-compose.yml -f docker/docker-compose.lakehouse.yml --profile lakehouse up -d --build
 ```
 
-Endpoints: Trino `http://localhost:8080`, Polaris `http://localhost:8181`, MinIO API `http://localhost:9000`, MinIO console `http://localhost:9001`.
+Endpoints: Trino `http://localhost:8080`, Polaris `http://localhost:8181`, RustFS S3 API `http://localhost:9000`, RustFS console `http://localhost:9001`.
 
 ## Migration rule
 
