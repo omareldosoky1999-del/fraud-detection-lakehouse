@@ -83,6 +83,13 @@ services:
     profiles: [lineage]
     restart: unless-stopped
 
+  airflow:
+    environment:
+      AIRFLOW__OPENLINEAGE__NAMESPACE: fraud_detection
+      AIRFLOW__OPENLINEAGE__TRANSPORT: '{"type":"http","url":"http://marquez:5000","endpoint":"api/v1/lineage"}'
+    depends_on:
+      marquez: {condition: service_healthy}
+
   spark-master-lineage-config:
     image: alpine/curl:8.22.0
     container_name: spark-master-lineage-config
