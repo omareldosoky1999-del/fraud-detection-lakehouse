@@ -9,3 +9,7 @@ output "storage_account_id" {
 output "container_name" {
   value = azurerm_storage_container.this.name
 }
+
+output "container_id" {
+  value = azurerm_storage_container.this.resource_manager_id
+}
