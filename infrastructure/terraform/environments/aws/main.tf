@@ -16,11 +16,11 @@ module "eks" {
 
   source = "../../modules/aws_eks"
 
-  cluster_name         = var.eks_cluster_name
-  kubernetes_version   = var.eks_kubernetes_version
-  subnet_ids           = var.eks_subnet_ids
-  node_instance_types  = var.eks_node_instance_types
-  node_min             = var.eks_node_min
-  node_desired         = var.eks_node_desired
-  node_max             = var.eks_node_max
+  cluster_name        = var.eks_cluster_name
+  kubernetes_version  = var.eks_kubernetes_version
+  subnet_ids          = var.eks_subnet_ids
+  node_instance_types = var.eks_node_instance_types
+  node_min            = var.eks_node_min
+  node_desired        = var.eks_node_desired
+  node_max            = var.eks_node_max
 }
