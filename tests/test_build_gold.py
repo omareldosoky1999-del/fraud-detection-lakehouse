@@ -78,3 +78,14 @@ def test_build_gold_is_iceberg_first_and_hdfs_is_compatibility_path():
     assert 'TABLES["decisions"]' in source
     assert 'LEGACY_HDFS_GOLD_OUTPUT' in source
     assert 'write_gold_tables' in source
+
+
+def test_gold_iceberg_smoke_fixture_exists():
+    path = (
+        __import__("pathlib").Path(__file__).parents[1]
+        / "scripts"
+        / "gold_iceberg_smoke.py"
+    )
+    source = path.read_text(encoding="utf-8")
+    assert "polaris.gold.fraud_decisions" in source
+    assert "createOrReplace()" in source
