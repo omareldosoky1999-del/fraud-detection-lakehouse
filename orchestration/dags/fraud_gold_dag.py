@@ -24,7 +24,6 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
 
 APP_DIR = "/app"  # matches the repo bind-mount into spark-master (see docker-compose.yml: "..:/app")
 
@@ -44,91 +43,15 @@ with DAG(
     tags=["fraud", "gold", "batch"],
 ) as dag:
 
-    def _check_silver_partition_exists(**context):
-        """Fail fast with a clear message instead of silently building an
-        empty Gold partition if the streaming job produced nothing for the
-        day (e.g. it was down). Uses the HDFS WebHDFS HTTP API so no extra
-        Python HDFS client dependency is needed in the Airflow image.
-        """
-        import os
-
-        import requests
-
-        # IMPORTANT: do NOT subtract another day here. For a daily
-        # schedule_interval with catchup=False, Airflow's `ds`/`logical_date`
-        # for the DagRun that actually EXECUTES at 02:00 on day N is already
-        # day N-1 (the run fires at the END of the day-N-1 -> day-N interval).
-        # I.e. `ds` already means "yesterday" relative to the real-world run
-        # day -- exactly the completed day whose Silver partition we want.
-        # Subtracting again here would target day N-2 and permanently lag the
-        # Gold layer by one extra day. See:
-        # https://airflow.apache.org/docs/apache-airflow/stable/templates-ref.html
-        run_date = context.get("ds")
-        if not run_date:
-            # Airflow exposes macros through the template context in normal
-            # execution; keep this callable usable in a direct unit test.
-            execution_date = context.get("logical_date")
-            run_date = execution_date.date().isoformat()
-        namenode = os.getenv("HDFS_WEBHDFS_URL", "http://namenode:9870")
-        path = f"/warehouse/silver/transactions/event_date={run_date}"
-        url = f"{namenode}/webhdfs/v1{path}?op=GETFILESTATUS"
-        resp = requests.get(url, timeout=10)
-        if resp.status_code != 200:
-            raise RuntimeError(
-                f"No Silver partition found for {run_date} at {path} "
-                f"(webhdfs status {resp.status_code}) -- is the streaming job running?")
-
-    check_silver = PythonOperator(
-        task_id="check_silver_partition_exists",
-        python_callable=_check_silver_partition_exists,
-    )
-
     validate_silver_quality = BashOperator(
         task_id="validate_silver_quality",
         bash_command=(
             "docker exec spark-master python3 "
             f"{APP_DIR}/scripts/validate_silver_quality.py "
             "--date {{{{ ds }}}} "
-            "--path hdfs://namenode:8020/warehouse/silver/transactions "
-            f"--report /tmp/silver_validation_{{{{ ds }}}}.json && "
-            "docker exec spark-master hdfs dfs -mkdir -p /warehouse/quality_reports && "
-            "docker exec spark-master hdfs dfs -put -f /tmp/silver_validation_{{{{ ds }}}}.json /warehouse/quality_reports/"
+            "--iceberg-catalog polaris "
+            "--iceberg-table silver.transactions "
+            f"--report /tmp/silver_validation_{{{{ ds }}}}.json"
         ),
     )
 
-    build_gold = BashOperator(
-        task_id="spark_submit_build_gold",
-        bash_command=(
-            "docker exec spark-master /opt/spark/bin/spark-submit "
-            f"--master spark://spark-master:7077 "
-            f"{APP_DIR}/processing/batch/build_gold.py --date {{{{ ds }}}} --lookback-days 2"  # ds already = yesterday, see note above
-        ),
-    )
-
-    repair_gold_tables = BashOperator(
-        task_id="hive_msck_repair_gold_tables",
-        bash_command=(
-            'docker exec hive beeline -u jdbc:hive2://localhost:10000 -e '
-            '"MSCK REPAIR TABLE fraud.bronze_transactions; '
-            'MSCK REPAIR TABLE fraud.quarantine_transactions; '
-            'MSCK REPAIR TABLE fraud.gold_customer_daily_risk; '
-            'MSCK REPAIR TABLE fraud.gold_daily_kpis; '
-            'MSCK REPAIR TABLE fraud.fraud_decisions; '
-            'MSCK REPAIR TABLE fraud.silver_transactions;"'
-        ),
-    )
-
-    evaluate = BashOperator(
-        task_id="evaluate_rules_report",
-        bash_command=(
-            "docker exec spark-master bash -c \""
-            "rm -rf /tmp/decisions_local && "
-            "hdfs dfs -get /warehouse/gold/fraud_decisions /tmp/decisions_local && "
-            f"python3 {APP_DIR}/scripts/evaluate_rules.py "
-            "--decisions /tmp/decisions_local "
-            f"--labels {APP_DIR}/labels/ground_truth.csv "
-            f"--out {APP_DIR}/reports/rules_report_{{{{ ds }}}}.txt\""
-        ),
-    )
-
-    check_silver >> validate_silver_quality >> build_gold >> repair_gold_tables >> evaluate
