@@ -21,3 +21,7 @@ output "aks_cluster_name" {
 output "aks_oidc_issuer_url" {
   value = var.enable_aks ? module.aks[0].oidc_issuer_url : null
 }
+
+output "workload_identity_client_id" {
+  value = var.enable_aks ? module.workload_identity[0].client_id : null
+}
