@@ -34,7 +34,10 @@ jobs:
           python -c "import pyspark; print('PySpark runtime:', pyspark.__version__)"
 
       - name: Static configuration checks
-        run: python -m compileall -q ingestion processing scripts orchestration && python -c "import yaml; yaml.safe_load(open('config/fraud_rules.yml'))"
+        run: |
+          python -m compileall -q ingestion processing scripts orchestration
+          python -c "import yaml; yaml.safe_load(open('config/fraud_rules.yml'))"
+          python scripts/validate_stack.py
 
       - name: Validate Docker Compose files
         run: |
