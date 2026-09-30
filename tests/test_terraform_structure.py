@@ -1,3 +1,4 @@
+import yaml
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1] / "infrastructure" / "terraform"
@@ -60,3 +61,16 @@ def test_cloud_environments_export_workload_identity_reference():
     for env, marker in expected.items():
         text = (ROOT / "environments" / env / "outputs.tf").read_text(encoding="utf-8")
         assert f'output "{marker}"' in text
+
+
+
+def test_cloud_storage_profiles_use_workload_identity():
+    profiles = yaml.safe_load(
+        (ROOT.parents[1] / "config" / "storage_profiles.yml").read_text(
+            encoding="utf-8"
+        )
+    )["storage_profiles"]
+
+    assert profiles["aws"]["authentication"] == "eks_pod_identity"
+    assert profiles["azure"]["authentication"] == "aks_workload_identity"
+    assert profiles["gcp"]["authentication"] == "gke_workload_identity_federation"
