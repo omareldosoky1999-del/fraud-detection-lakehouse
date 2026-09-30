@@ -58,3 +58,8 @@ def test_external_secret_template_and_cloud_contracts():
         assert cfg["externalSecrets"]["enabled"] is False
         assert cfg["externalSecrets"]["secretStoreRef"]["kind"] == "ClusterSecretStore"
         assert cfg["externalSecrets"]["targetName"] == "fraud-platform-runtime"
+
+
+def test_helm_does_not_duplicate_pod_labels():
+    app = (ROOT / "templates" / "sparkapplication.yaml").read_text(encoding="utf-8")
+    assert app.count("range $key, $value := .Values.serviceAccount.podLabels") == 2
