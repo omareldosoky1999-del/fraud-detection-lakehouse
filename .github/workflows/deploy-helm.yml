@@ -59,6 +59,7 @@ jobs:
         id: values
         shell: bash
         run: |
+          # Supported values files: values-aws.yaml, values-azure.yaml, values-gcp.yaml
           case "${{ inputs.environment }}" in
             aws|azure|gcp)
               echo "file=deploy/helm/fraud-platform/values-${{ inputs.environment }}.yaml" >> "$GITHUB_OUTPUT"
