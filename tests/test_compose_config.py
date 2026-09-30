@@ -49,3 +49,10 @@ def test_overlay_shared_services_keep_profile_union():
 
     assert set(services["rustfs"]["profiles"]) == {"lakehouse", "mlops"}
     assert set(services["rustfs-init"]["profiles"]) == {"lakehouse", "mlops"}
+
+    lineage = module._merge_services(
+        "docker/docker-compose.yml",
+        "docker/docker-compose.lineage.yml",
+    )
+    assert "marquez" in lineage
+    assert "airflow" in lineage
