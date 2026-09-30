@@ -21,6 +21,8 @@ v = "${ICEBERG_VERSION}"
 base = "/opt/spark/jars"
 urlretrieve(f"https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_2.12/{v}/iceberg-spark-runtime-3.5_2.12-{v}.jar", f"{base}/iceberg-spark-runtime-3.5_2.12-{v}.jar")
 urlretrieve(f"https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/{v}/iceberg-aws-bundle-{v}.jar", f"{base}/iceberg-aws-bundle-{v}.jar")
+urlretrieve(f"https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-gcp-bundle/{v}/iceberg-gcp-bundle-{v}.jar", f"{base}/iceberg-gcp-bundle-{v}.jar")
+urlretrieve(f"https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-azure-bundle/{v}/iceberg-azure-bundle-{v}.jar", f"{base}/iceberg-azure-bundle-{v}.jar")
 
 ol = "${OPENLINEAGE_VERSION}"
 urlretrieve(
