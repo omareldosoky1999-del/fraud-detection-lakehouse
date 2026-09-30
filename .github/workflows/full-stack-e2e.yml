@@ -13,7 +13,6 @@ on:
       - "processing/**"
       - "config/**"
       - "scripts/promote_ensemble.py"
-      - "scripts/full_stack_smoke.sh"
       - ".github/workflows/full-stack-e2e.yml"
 
 jobs:
@@ -144,8 +143,15 @@ jobs:
         run: |
           docker cp warehouse/trino/semantic_views.sql trino:/tmp/semantic_views.sql
           docker exec trino trino --file /tmp/semantic_views.sql
-          docker exec trino trino --execute \
-            "SELECT count(*) FROM polaris.analytics.fraud_transaction_risk WHERE decision <> 'PASS'"
+          non_pass=$(docker exec trino trino --execute \
+            "SELECT count(*) FROM polaris.analytics.fraud_transaction_risk WHERE decision <> 'PASS'" \
+            --output-format CSV_HEADER=false | tr -d '\r')
+          scored=$(docker exec trino trino --execute \
+            "SELECT count(*) FROM polaris.analytics.fraud_transaction_risk WHERE ml_probability IS NOT NULL" \
+            --output-format CSV_HEADER=false | tr -d '\r')
+          echo "non_pass=$non_pass scored_with_ml_probability=$scored"
+          [ "${non_pass:-0}" -gt 0 ]
+          [ "${scored:-0}" -gt 0 ]
 
       - name: Evaluate end-to-end fraud decisions
         run: |
@@ -169,13 +175,14 @@ jobs:
 
       - name: Verify HBase serving API has client state
         run: |
-          for client in $(seq 1 20); do
-            code=$(curl -s -o /tmp/client.json -w '%{http_code}' "http://localhost:8095/v1/clients/$client")
-            echo "client=$client http=$code"
-            if [ "$code" = "200" ]; then cat /tmp/client.json; exit 0; fi
-          done
-          docker logs serving-api
-          exit 1
+          client=$(docker exec trino trino --execute \
+            "SELECT min(client_id) FROM polaris.gold.fraud_decisions" \
+            --output-format CSV_HEADER=false | tr -d '\r')
+          test -n "$client"
+          echo "selected_client=$client"
+          code=$(curl -s -o /tmp/client.json -w '%{http_code}' "http://localhost:8095/v1/clients/$client")
+          cat /tmp/client.json || true
+          test "$code" = "200"
 
       - name: Show pipeline logs on failure
         if: failure()
