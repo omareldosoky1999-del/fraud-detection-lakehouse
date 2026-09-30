@@ -77,13 +77,6 @@ def _register_spark_model(
             value=str(value),
         )
 
-    if promote_alias:
-        client.set_registered_model_alias(
-            registered_name,
-            promote_alias,
-            version.version,
-        )
-
     return version.version
 
 
@@ -169,6 +162,7 @@ def train(
             "validation_rows": validation_count,
             "validation_strategy": "time_based_80_20",
         }
+        registered_versions = {}
 
         client = MlflowClient()
         with mlflow.start_run(run_name=f"fraud-ensemble-{seed}") as run:
@@ -203,11 +197,16 @@ def train(
                         "validation_status": "PASSED",
                         "validation_auc": auc,
                         "ensemble_member": "true",
+                        "ensemble_run_id": run.info.run_id,
                         "spark_version": spark.version,
                         "validation_strategy": "time_based_80_20",
                     },
-                    promote_alias=alias,
+                    promote_alias=None,
                 )
+                registered_versions[logical_name] = {
+                    "registered_name": registered_name,
+                    "version": version,
+                }
 
                 metrics[logical_name] = {
                     "validation_auc": auc,
@@ -218,8 +217,22 @@ def train(
 
                 print(
                     f"[MLFLOW] {logical_name}: auc={auc:.4f}, "
-                    f"registered={registered_name}@{version}, alias={alias}"
+                    f"registered={registered_name}@{version}; pending alias={alias}"
                 )
+
+            # Promote the complete ensemble only after every member has
+            # trained, validated and registered successfully.
+            for member in registered_versions.values():
+                client.set_registered_model_alias(
+                    member["registered_name"],
+                    alias,
+                    member["version"],
+                )
+
+            print(
+                f"[MLFLOW] ensemble release promoted atomically: "
+                f"alias={alias}, run_id={run.info.run_id}"
+            )
 
             metrics_path = out / "training_metrics.json"
             metrics_path.write_text(
