@@ -57,6 +57,15 @@ def main():
         resolved = client.get_model_version_by_alias(MODEL_NAME, ALIAS)
 
         assert str(resolved.version) == str(version.version)
+
+        # The registry contract is not complete until a deployed Spark
+        # runtime can download the artifact and execute inference.
+        loaded = mlflow.spark.load_model(
+            f"models:/{MODEL_NAME}@{ALIAS}"
+        )
+        predictions = loaded.transform(features).select("prediction").collect()
+        assert len(predictions) == 6
+        assert {int(row.prediction) for row in predictions}.issubset({0, 1})
         print(
             f"[MLFLOW_SMOKE] registered {MODEL_NAME}@{version.version}; "
             f"alias={ALIAS}; run_id={run.info.run_id}"
