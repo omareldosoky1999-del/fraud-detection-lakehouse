@@ -43,6 +43,9 @@ environment:
 serviceAccount:
   annotations: {}
   podLabels: {}
+  cloudIdentity:
+    azureClientId: ""
+    gcpServiceAccount: ""
 
 resources:
   driver: {}
