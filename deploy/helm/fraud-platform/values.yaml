@@ -1,0 +1,44 @@
+image:
+  repository: ghcr.io/omareldosoky1999-del/fraud-detection-lakehouse/spark-app
+  tag: latest
+  pullPolicy: IfNotPresent
+
+spark:
+  version: "3.5.9"
+  mainApplicationFile: local:///app/processing/streaming/bronze_silver_job.py
+  serviceAccount: fraud-spark
+  restartPolicy: Always
+  driver:
+    cores: 2
+    memory: 4g
+  executor:
+    instances: 2
+    cores: 2
+    memory: 4g
+
+env:
+  ICEBERG_ENABLED: "true"
+  ICEBERG_CATALOG_NAME: polaris
+  POLARIS_URI: http://polaris:8181/api/catalog
+  POLARIS_WAREHOUSE: fraud
+  ICEBERG_FILEIO_IMPL: org.apache.iceberg.aws.s3.S3FileIO
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  MLFLOW_MODEL_CONFIG: /app/config/ml_models.yml
+  MLFLOW_MODEL_ALIAS: production
+  OPENLINEAGE_ENABLED: "true"
+  OPENLINEAGE_URL: http://marquez:5000
+  OPENLINEAGE_ENDPOINT: /api/v1/lineage
+  OPENLINEAGE_NAMESPACE: fraud_detection
+  KAFKA_BOOTSTRAP_INTERNAL: kafka:9092
+  TOPIC_TRANSACTIONS: transactions
+  TOPIC_ALERTS: fraud.alerts
+  HBASE_HOST: hbase
+  HBASE_THRIFT_PORT: "9090"
+
+environment:
+  name: cloud
+  namespace: fraud-platform
+
+resources:
+  driver: {}
+  executor: {}
