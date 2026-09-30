@@ -8,11 +8,21 @@ import great_expectations as gx
 import yaml
 from pyspark.sql import DataFrame
 
-DEFAULT_CONTRACT = Path("config/quality/silver.yml")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_CONTRACT = PROJECT_ROOT / "config" / "quality" / "silver.yml"
+
+def _resolve_contract_path(path: str | Path | None = None) -> Path:
+    """Resolve the quality contract independently of the process working directory."""
+    if path is not None:
+        candidate = Path(path)
+        if candidate.is_absolute():
+            return candidate
+        return Path.cwd() / candidate
+    return DEFAULT_CONTRACT
 
 
 def load_silver_contract(path: str | Path | None = None) -> dict[str, Any]:
-    contract_path = Path(path or DEFAULT_CONTRACT)
+    contract_path = _resolve_contract_path(path)
     data = yaml.safe_load(contract_path.read_text(encoding="utf-8")) or {}
     silver = data.get("quality", {}).get("silver", {})
     if not silver:
