@@ -176,13 +176,12 @@ jobs:
           [ "${non_pass:-0}" -gt 0 ]
           [ "${scored:-0}" -gt 0 ]
 
-      - name: Evaluate end-to-end fraud decisions
+      - name: Evaluate end-to-end fraud decisions from Iceberg
         run: |
-          docker exec spark-master bash -lc "rm -rf /tmp/full-stack-decisions && hdfs dfs -get /warehouse/gold/fraud_decisions /tmp/full-stack-decisions"
-          python scripts/evaluate_rules.py \
-            --decisions /tmp/full-stack-decisions \
-            --labels /tmp/full-stack-ground-truth.csv \
-            --out /tmp/full-stack-fraud-report.txt
+          docker exec spark-master             /opt/spark/bin/spark-submit             --master spark://spark-master:7077             /app/scripts/export_iceberg_decisions.py             --catalog polaris             --table gold.fraud_decisions             --date 2026-09-01             --output /tmp/full-stack-decisions
+          rm -rf /tmp/full-stack-decisions
+          docker cp spark-master:/tmp/full-stack-decisions /tmp/full-stack-decisions
+          python scripts/evaluate_rules.py             --decisions /tmp/full-stack-decisions             --labels /tmp/full-stack-ground-truth.csv             --out /tmp/full-stack-fraud-report.txt
           grep -E 'precision=|recall=|f1=' /tmp/full-stack-fraud-report.txt
 
       - name: Verify alert consumer deduplication
