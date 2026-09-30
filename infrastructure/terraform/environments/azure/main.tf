@@ -48,7 +48,7 @@ module "workload_identity" {
   oidc_issuer_url     = module.aks[0].oidc_issuer_url
   namespace           = var.workload_namespace
   service_account     = var.workload_service_account
-  storage_scope       = module.object_storage.storage_account_id
+  storage_scope       = module.object_storage.container_id
 
   depends_on = [module.aks]
 }
