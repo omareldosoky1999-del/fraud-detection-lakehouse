@@ -33,3 +33,10 @@ reports/*.txt
 models/
 serving-data/
 *.db
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+*.tfvars
+*.tfvars.json
