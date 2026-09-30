@@ -108,7 +108,6 @@ services:
       POLARIS_REALM_CONTEXT_REALMS: POLARIS
       QUARKUS_OTEL_SDK_DISABLED: "true"
       POLARIS_BOOTSTRAP_CREDENTIALS: POLARIS,root,s3cr3t
-      polaris.features."ALLOW_INSECURE_STORAGE_TYPES": "true"
       polaris.features."SUPPORTED_CATALOG_STORAGE_TYPES": '["S3"]'
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8182/q/health"]
