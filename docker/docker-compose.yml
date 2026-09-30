@@ -158,6 +158,27 @@ services:
   # ------------------------------------------------------------------
   # SERVING: HBase
   # ------------------------------------------------------------------
+  alert-consumer:
+    build: {context: .., dockerfile: docker/serving/Dockerfile}
+    container_name: alert-consumer
+    command:
+      - python
+      - -m
+      - processing.serving.alert_consumer
+      - --bootstrap
+      - kafka:9092
+      - --topic
+      - fraud.alerts
+      - --db
+      - /data/alerts.db
+    depends_on:
+      kafka: {condition: service_healthy}
+    volumes:
+      - alerts-data:/data
+    networks: [fraud-net]
+    profiles: [serving]
+    restart: unless-stopped
+
   serving-api:
     build: {context: .., dockerfile: docker/serving/Dockerfile}
     container_name: serving-api
@@ -305,3 +326,4 @@ volumes:
   hive_data:
   prometheus-data:
   grafana-data:
+  alerts-data:
