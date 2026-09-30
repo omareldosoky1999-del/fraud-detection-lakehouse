@@ -135,4 +135,14 @@ def mark_committed_iceberg(
         [(batch_token, committed_at)],
         ["batch_token", "committed_at"],
     )
-    frame.writeTo(qualified).append()
+    frame.createOrReplaceTempView("__streaming_commit_marker")
+    spark.sql(
+        f"""
+        MERGE INTO {qualified} AS target
+        USING __streaming_commit_marker AS source
+        ON target.batch_token = source.batch_token
+        WHEN NOT MATCHED THEN
+          INSERT (batch_token, committed_at)
+          VALUES (source.batch_token, source.committed_at)
+        """
+    )
