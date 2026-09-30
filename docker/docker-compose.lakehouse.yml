@@ -139,7 +139,7 @@ services:
           -H "Authorization: Bearer $$TOKEN" \
           -H 'Polaris-Realm: POLARIS' \
           -H 'Content-Type: application/json' \
-          -d '{"catalog":{"name":"'"$${CATALOG_NAME}"'","type":"INTERNAL","readOnly":false,"properties":{"default-base-location":"s3://iceberg"},"storageConfigInfo":{"storageType":"S3","allowedLocations":["s3://iceberg"],"endpoint":"http://minio:9000","endpointInternal":"http://minio:9000","stsUnavailable":true,"pathStyleAccess":true,"region":"us-east-1"}}}')
+          -d '{"catalog":{"name":"'"$${CATALOG_NAME}"'","type":"INTERNAL","readOnly":false,"properties":{"default-base-location":"s3://iceberg"},"storageConfigInfo":{"storageType":"S3","allowedLocations":["s3://iceberg"],"endpoint":"http://minio:9000","endpointInternal":"http://minio:9000","pathStyleAccess":true,"region":"us-east-1"}}}')
         case "$$RESPONSE" in
           200|201|409) echo "Polaris catalog '$${CATALOG_NAME}' ready (HTTP $$RESPONSE)" ;;
           *) cat /tmp/catalog.json >&2; exit 1 ;;
