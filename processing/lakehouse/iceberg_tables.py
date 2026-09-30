@@ -12,6 +12,14 @@ TABLES = {
     "decisions": "gold.fraud_decisions",
 }
 
+PARTITIONS = {
+    "bronze": ["ingest_date"],
+    "quarantine": ["quarantine_date"],
+    "silver": ["event_date"],
+    "features": ["event_date"],
+    "decisions": ["event_date"],
+}
+
 
 def _qualified(catalog: str, logical_name: str) -> str:
     return f"{catalog}.{logical_name}"
@@ -43,21 +51,30 @@ def _ensure_table(
     )
 
 
-def _overwrite_partitions(
+def _replace_batch(
     spark: SparkSession,
     frame: DataFrame,
     table: str,
     partition_columns: list[str],
     temp_view: str,
+    batch_token: str,
 ) -> None:
-    # The micro-batch token is part of the partition key. A retry of an
-    # uncommitted batch replaces exactly that batch's partitions.
+    """Replace exactly one micro-batch without making batch_token a partition.
+
+    Iceberg partitioning remains time-oriented for manageable file/partition
+    counts. The deterministic batch_token is retained as a row-level idempotency
+    key: retrying a batch deletes rows from that batch first, then appends the
+    complete batch atomically.
+    """
     namespace = table.split(".")[-2]
     catalog = table.split(".")[0]
     _ensure_namespace(spark, catalog, namespace)
     _ensure_table(spark, table, frame, partition_columns, temp_view)
 
-    frame.writeTo(table).overwritePartitions()
+    escaped = batch_token.replace("'", "''")
+    spark.sql(f"DELETE FROM {table} WHERE batch_token = '{escaped}'")
+
+    frame.writeTo(table).append()
 
 
 def write_micro_batch(
@@ -81,44 +98,48 @@ def write_micro_batch(
         .withColumn("ingest_date", F.to_date("kafka_timestamp"))
         .withColumn("batch_token", F.lit(batch_token))
     )
-    _overwrite_partitions(
+    _replace_batch(
         spark,
         bronze_frame,
         _qualified(catalog, TABLES["bronze"]),
-        ["batch_token", "ingest_date"],
+        PARTITIONS["bronze"],
         "__iceberg_bronze_schema",
+        batch_token,
     )
 
-    if quarantine is not None and not quarantine.rdd.isEmpty():
+    if quarantine is not None:
         quarantine_frame = (
             quarantine
             .withColumn("quarantine_date", F.to_date("quarantined_at"))
             .withColumn("batch_token", F.lit(batch_token))
         )
-        _overwrite_partitions(
+        _replace_batch(
             spark,
             quarantine_frame,
             _qualified(catalog, TABLES["quarantine"]),
-            ["batch_token", "quarantine_date"],
+            PARTITIONS["quarantine"],
             "__iceberg_quarantine_schema",
+            batch_token,
         )
 
     if silver is not None:
-        _overwrite_partitions(
+        _replace_batch(
             spark,
             silver,
             _qualified(catalog, TABLES["silver"]),
-            ["batch_token", "event_date"],
+            PARTITIONS["silver"],
             "__iceberg_silver_schema",
+            batch_token,
         )
 
     if features is not None:
-        _overwrite_partitions(
+        _replace_batch(
             spark,
             features,
             _qualified(catalog, TABLES["features"]),
-            ["batch_token", "event_date"],
+            PARTITIONS["features"],
             "__iceberg_features_schema",
+            batch_token,
         )
 
     if decisions is not None:
@@ -127,10 +148,11 @@ def write_micro_batch(
             decisions_frame = decisions_frame.withColumn(
                 "ml_probability", F.lit(None).cast("double")
             )
-        _overwrite_partitions(
+        _replace_batch(
             spark,
             decisions_frame,
             _qualified(catalog, TABLES["decisions"]),
-            ["batch_token", "event_date"],
+            PARTITIONS["decisions"],
             "__iceberg_decisions_schema",
+            batch_token,
         )
