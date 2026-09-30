@@ -1,31 +1,21 @@
-"""Daily Gold-layer build.
+"""Daily Iceberg-first Gold build.
 
-Deliberately a plain BATCH DAG, scheduled once a day -- it does NOT try to
-run the streaming bronze/silver job (that runs continuously as its own
-long-lived Spark application, started separately; see
-processing/streaming/bronze_silver_job.py and the spark-submit command in
-the README). The old orchestration/dags/fraud_pipeline_dag.py tried to run a
-`.awaitTermination()` streaming job as a daily Airflow task, so the task
-would just hang forever -- that mistake is not repeated here.
+The streaming application continuously writes Silver, features and fraud
+decisions to Iceberg. This DAG validates the previous completed Silver
+partition with Great Expectations, then builds Gold from the Iceberg decision
+table.
 
-How spark-submit is invoked from Airflow
------------------------------------------
-The Airflow container has no Spark installed. Rather than build a second,
-separately-versioned PySpark install into the Airflow image (a real source
-of "works in one container, not the other" bugs), this DAG shells out to
-`docker exec spark-master spark-submit ...`: the docker socket is mounted
-into the Airflow container (see docker-compose.yml, the airflow service) so
-it can drive the SAME spark-master container everything else uses. This is a
-pragmatic choice for a single-host academic deployment; a multi-host
-production setup would use the Livy REST API or the SparkSubmitOperator
-against a real cluster manager instead.
+HDFS/Hive tasks remain optional migration compatibility and are disabled unless
+LEGACY_HDFS_ORCHESTRATION=true.
 """
+from __future__ import annotations
+
 from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
-APP_DIR = "/app"  # matches the repo bind-mount into spark-master (see docker-compose.yml: "..:/app")
+APP_DIR = "/app"
 
 default_args = {
     "owner": "fraud-platform",
@@ -35,12 +25,12 @@ default_args = {
 
 with DAG(
     dag_id="fraud_gold_daily",
-    description="Aggregate the previous day's fraud_decisions into the Gold layer.",
+    description="Validate Iceberg Silver and build previous-day Iceberg Gold aggregates.",
     default_args=default_args,
-    schedule_interval="0 2 * * *",  # 02:00 daily, well after the day's stream has settled
+    schedule_interval="0 2 * * *",
     start_date=datetime(2026, 9, 1),
     catchup=False,
-    tags=["fraud", "gold", "batch"],
+    tags=["fraud", "gold", "batch", "iceberg", "great-expectations"],
 ) as dag:
 
     validate_silver_quality = BashOperator(
@@ -55,3 +45,55 @@ with DAG(
         ),
     )
 
+    build_gold = BashOperator(
+        task_id="spark_submit_build_gold",
+        bash_command=(
+            "docker exec spark-master /opt/spark/bin/spark-submit "
+            "--master spark://spark-master:7077 "
+            f"{APP_DIR}/processing/batch/build_gold.py "
+            "--date {{{{ ds }}}} "
+            "--lookback-days 2"
+        ),
+    )
+
+    repair_legacy_hive = BashOperator(
+        task_id="legacy_hive_msck_repair",
+        bash_command=(
+            'if [ "$LEGACY_HDFS_ORCHESTRATION" != "true" ]; then '
+            "echo 'Skipping legacy Hive repair: Iceberg is the system of record.'; "
+            "exit 0; "
+            "fi; "
+            'docker exec hive beeline -u jdbc:hive2://localhost:10000 -e '
+            '"MSCK REPAIR TABLE fraud.bronze_transactions; '
+            'MSCK REPAIR TABLE fraud.quarantine_transactions; '
+            'MSCK REPAIR TABLE fraud.gold_customer_daily_risk; '
+            'MSCK REPAIR TABLE fraud.gold_daily_kpis; '
+            'MSCK REPAIR TABLE fraud.fraud_decisions; '
+            'MSCK REPAIR TABLE fraud.silver_transactions;"'
+        ),
+        env={
+            "LEGACY_HDFS_ORCHESTRATION": "{{ var.value.get('LEGACY_HDFS_ORCHESTRATION', 'false') }}"
+        },
+    )
+
+    legacy_rules_evaluation = BashOperator(
+        task_id="legacy_rules_evaluation",
+        bash_command=(
+            'if [ "$LEGACY_HDFS_ORCHESTRATION" != "true" ]; then '
+            "echo 'Skipping legacy rules evaluation: decisions are stored in Iceberg.'; "
+            "exit 0; "
+            "fi; "
+            'docker exec spark-master bash -lc '
+            '"rm -rf /tmp/decisions_local && '
+            'hdfs dfs -get /warehouse/gold/fraud_decisions /tmp/decisions_local && '
+            f"python3 {APP_DIR}/scripts/evaluate_rules.py "
+            "--decisions /tmp/decisions_local "
+            f"--labels {APP_DIR}/labels/ground_truth.csv "
+            f'--out {APP_DIR}/reports/rules_report_{{{{ ds }}}}.txt"'
+        ),
+        env={
+            "LEGACY_HDFS_ORCHESTRATION": "{{ var.value.get('LEGACY_HDFS_ORCHESTRATION', 'false') }}"
+        },
+    )
+
+    validate_silver_quality >> build_gold >> repair_legacy_hive >> legacy_rules_evaluation
