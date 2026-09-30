@@ -98,12 +98,7 @@ services:
       QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/polaris
       QUARKUS_DATASOURCE_USERNAME: polaris
       QUARKUS_DATASOURCE_PASSWORD: polaris-dev-password
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >-
-        /opt/polaris/bin/polaris-admin-tool bootstrap
-        -r POLARIS
-        -c POLARIS,root,s3cr3t
+    command: ["bootstrap", "-r", "POLARIS", "-c", "POLARIS,root,s3cr3t"]
     networks: [fraud-net]
     profiles: [lakehouse]
 
