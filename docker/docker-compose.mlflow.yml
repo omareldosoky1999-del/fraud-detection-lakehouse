@@ -25,7 +25,7 @@ services:
       MLFLOW_S3_ENDPOINT_URL: http://mlflow-rustfs:9000
 
   mlflow-rustfs:
-    image: rustfs/mlflow-rustfs:1.0.0-rc.6
+    image: rustfs/rustfs:1.0.0-rc.6
     container_name: rustfs-mlops
     command: server /data --address "0.0.0.0:9000" --console-address "0.0.0.0:9001"
     environment:
