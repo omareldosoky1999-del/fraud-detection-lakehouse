@@ -20,7 +20,6 @@ services:
       spark-master: {condition: service_started}
       marquez: {condition: service_healthy}
 
-services:
   marquez-db:
     image: postgres:14
     container_name: marquez-db
