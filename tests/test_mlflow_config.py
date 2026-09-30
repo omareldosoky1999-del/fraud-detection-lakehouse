@@ -18,7 +18,7 @@ def test_mlflow_overlay_is_pinned_and_wired():
     assert services["spark-master"]["environment"]["MLFLOW_S3_ENDPOINT_URL"] == "http://mlflow-rustfs:9000"
     assert services["spark-worker"]["environment"]["AWS_DEFAULT_REGION"] == "us-east-1"
     mlflow_env = services["mlflow"]["environment"]
-    assert services["mlflow"]["depends_on"]["rustfs-init"]["condition"] == "service_completed_successfully"
+    assert services["mlflow"]["depends_on"]["mlflow-rustfs-init"]["condition"] == "service_completed_successfully"
     assert "mlflow:5000" in mlflow_env["MLFLOW_SERVER_ALLOWED_HOSTS"]
     assert mlflow_env["MLFLOW_SERVER_CORS_ALLOWED_ORIGINS"] == "http://localhost:*"
 
