@@ -26,3 +26,10 @@ def test_schema_registry_enforces_backward_compatibility():
     )
     env = data["services"]["schema-registry"]["environment"]
     assert env["SCHEMA_REGISTRY_AVRO_COMPATIBILITY_LEVEL"] == "BACKWARD"
+
+def test_hbase_healthcheck_is_http_only():
+    text = (Path(__file__).parents[1] / "docker" / "docker-compose.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'curl -fsS http://localhost:16010/master-status' in text
+    assert "hbase shell" not in text.split("hbase:")[1].split("hive:")[0]
