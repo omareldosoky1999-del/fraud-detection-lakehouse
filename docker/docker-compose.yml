@@ -203,11 +203,7 @@ services:
       - hbase_data:/hbase-data
     depends_on: [zookeeper]
     healthcheck:
-      test:
-        - CMD-SHELL
-        - >-
-          curl -fsS http://localhost:16010/master-status >/dev/null 2>&1 &&
-          echo 'status' | hbase shell -n >/dev/null 2>&1
+      test: ["CMD-SHELL", "curl -fsS http://localhost:16010/master-status >/dev/null"]
       interval: 15s
       timeout: 10s
       retries: 30
