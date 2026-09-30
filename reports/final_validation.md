@@ -1,71 +1,135 @@
 # Fraud Detection Platform — Final Validation Report
 
-## Scope of this revision
+**Validation date:** 2026-09-30  
+**Current main:** `acc23e55adc8324e69d18d0e7236b78ae9e98aa9`
 
-The project was revised to address the major architecture and reliability issues found in the baseline review.
+This report supersedes the earlier baseline-review report. The repository is now validated as a layered, cloud-ready fraud detection platform with Iceberg/Polaris as the active analytical path and HDFS/Hive retained only as a migration-era compatibility path.
 
-## Implemented fixes
+## 1. Current architecture
 
-1. Docker Compose profile dependency issue: foundational services are now always active; optional profiles depend on default-active services or share a profile.
-2. Kafka/ZooKeeper/HBase persistence: named volumes were added.
-3. False exactly-once claim: streaming documentation now distinguishes Spark source progress from `foreachBatch` side effects. Deterministic batch tokens + commit markers + dynamic partition overwrite were added for restart-safe batch outputs.
-4. Cross-checkpoint duplication: Silver filters transaction IDs already committed in other batch tokens.
-5. Bronze layer: raw decoded Kafka events are now persisted before DQ.
-6. Configurable fraud rules: thresholds moved to `config/fraud_rules.yml`.
-7. Financial precision: Silver monetary fields use Decimal types instead of floating-point money storage.
-8. Late data handling: Gold rebuilds a rolling two-day lookback by default.
-9. Alert reliability: alerts contain deterministic `alert_id`; a SQLite-backed deduplicating consumer was added.
-10. DLQ recovery: a replay utility for manually corrected JSONL records was added.
-11. Serving layer: a lightweight HBase client API was added (`/health`, `/v1/clients/{client_id}`).
-12. MLlib path: optional Logistic Regression + Random Forest + GBT training/inference modules were added; rules-only mode remains the default unless a model directory is supplied.
-13. Monitoring: Spark driver metrics, Prometheus scraping, Grafana provisioning, and a starter dashboard were added.
-14. Image reproducibility: `:latest` tags were removed from monitoring/HBase images in favor of pinned tags.
-15. CI/static validation: compile/config checks and `scripts/validate_stack.py` were added.
+```text
+Kafka + Schema Registry
+        |
+        v
+Spark Structured Streaming
+        |
+        +--> Bronze / DQ / Quarantine
+        |
+        +--> Silver (Decimal money)
+        |
+        +--> Point-in-time features
+        |
+        +--> Rules + MLlib ensemble
+                |
+                +--> Fraud Decisions
+                         |
+                         +--> Iceberg / Polaris / RustFS
+                         +--> HBase serving cache
+                         +--> Kafka fraud.alerts
+        |
+        +--> Great Expectations quality gate
+        |
+        +--> Airflow Gold rebuild
+        |
+        +--> Trino semantic analytics
+```
 
-## Checks executed in this environment
+Control-plane components include MLflow, OpenLineage/Marquez, Prometheus/Grafana/Alertmanager, Helm/Spark Operator, Terraform, CI and CodeQL.
 
-| Check | Result |
+## 2. Reliability controls verified in code
+
+- Spark checkpoints track Kafka source progress.
+- Deterministic micro-batch tokens and commit markers provide retry-safe side-effect handling.
+- Iceberg tables use time-oriented partitions; `batch_token` is retained as a row-level idempotency key instead of becoming a high-cardinality partition.
+- Duplicate transaction IDs are filtered against previously committed Silver data.
+- Bronze/Quarantine data is preserved before duplicate filtering.
+- Financial amounts are represented with Decimal types in Silver.
+- Fraud thresholds are configuration-driven through `config/fraud_rules.yml`.
+- Alert IDs are deterministic and the SQLite alert consumer de-duplicates repeated deliveries.
+- HBase is treated as a serving cache; Iceberg remains the analytical system of record.
+- Streaming inference requires the configured production MLflow ensemble and rejects mixed ensemble releases.
+- Cloud deployment requires an explicit immutable image tag and uses Helm atomic upgrade semantics.
+- Cloud runtime secrets are injected through Kubernetes Secret/External Secrets mechanisms and workload identity boundaries rather than committed cloud keys.
+- The Great Expectations contract resolves independently of the process working directory, so Docker execution does not depend on a fragile relative `cwd`.
+
+## 3. Verified GitHub Actions gates
+
+### Current HEAD
+
+| Gate | Run | Result |
+|---|---:|---|
+| CI | #520 | PASS |
+| CodeQL | #226 | PASS |
+| Quality E2E | #18 | PASS |
+
+The current CI run executed **137 tests successfully with 8 warnings**. It also completed Python syntax checks, YAML validation, static platform validation, Docker Compose validation, Helm rendering/linting, and the informational fraud-rule precision/recall evaluation.
+
+### Latest relevant integration gates
+
+The repository intentionally uses path-triggered layer-specific workflows plus a heavier manual/weekly full-stack workflow. Therefore not every integration workflow reruns for documentation-only or unrelated changes.
+
+| Capability | Latest successful validation |
 |---|---|
-| `python -m compileall -q .` | PASS |
-| Compose YAML parse | PASS |
-| Compose profile dependency validation | PASS |
-| No `:latest` image tags | PASS |
-| Persistent volume checks | PASS |
-| Fraud-rules YAML parse | PASS |
-| Prometheus/Grafana YAML parse | PASS |
-| Hive DDL presence/partition checks | PASS |
-| `scripts/validate_stack.py` | PASS |
-| `pytest -q tests/test_compose_config.py` | PASS (1 test) |
+| Container build | Container Build #55 |
+| Iceberg / Polaris / RustFS / Trino | Lakehouse E2E #65 |
+| Spark MLlib -> MLflow Registry | MLOps E2E #46 |
+| Serving alert de-duplication | Serving E2E #14 |
+| Great Expectations Silver gate | Quality E2E #18 |
 
-## Tests blocked by the review environment
+These runs cover the corresponding implementation revisions; the current HEAD's CI/CodeQL validation covers the final repository state.
 
-The full pytest suite could not be executed because this environment does not contain `fastavro` or PySpark, and package installation from the network is unavailable. The earlier full-suite collection stopped on missing `fastavro`; Spark-backed tests were skipped because PySpark was absent.
+## 4. Important issues closed during stabilization
 
-The environment also has no Docker/Compose binary, so the Kafka -> Spark -> HDFS/Hive -> HBase -> Airflow end-to-end deployment could not be launched here.
+The stabilization cycle corrected:
 
-Therefore this revision is **static/config validated, not end-to-end runtime validated in this environment**. The project intentionally does not claim that the full distributed stack was executed here.
+1. Missing `path_exists` import in streaming.
+2. Iceberg Silver table read contract mismatch.
+3. Gold Iceberg table reference contract mismatch.
+4. Polaris Gold smoke fixture naming mismatch.
+5. Cloud deployment values-file contract validation.
+6. Model rollback compatibility with legacy registry entries.
+7. Cloud deduplication fail-closed contract wording.
+8. Great Expectations contract loading failure inside Docker.
+9. Stale E2E documentation referencing a removed workflow file.
 
-## Recommended runtime verification command set on a Docker-enabled machine
+The fixes were applied to implementation/tests/documentation rather than by weakening runtime assertions.
 
-```bash
-cd docker
-docker compose up -d --build
-docker compose --profile serving --profile warehouse --profile orchestration --profile monitoring up -d --build
-bash kafka/create-topics.sh localhost:29092
+## 5. Production boundary
 
-docker exec hive beeline -u jdbc:hive2://localhost:10000 -f /app/warehouse/hive/ddl.sql
+This repository is production-oriented in architecture and controls, but the bundled Docker environment remains a development/local environment. Production infrastructure still requires:
 
-# start stream
-# run producer
-# verify Bronze/Silver/decisions/HBase/alerts
-# trigger Airflow Gold DAG
-# open Prometheus/Grafana/serving API
-```
+- TLS and authenticated service endpoints.
+- Production-grade network policy and identity configuration.
+- Cloud-managed secret systems and workload identity.
+- Explicit Terraform apply under controlled credentials.
+- A governed MLflow production-promotion process.
+- Operational capacity sizing, backup/restore procedures, and organization-specific SLOs.
 
-After dependencies are installed locally:
+The repository does not claim that these real cloud controls have been deployed merely because their Terraform/Helm contracts validate in CI.
 
-```bash
-pip install -r requirements-dev.txt
-pip install pyspark==3.5.1
-pytest -q
-```
+## 6. Release checklist
+
+- [x] CI green
+- [x] CodeQL green
+- [x] Container image build green
+- [x] Great Expectations quality gate green
+- [x] Lakehouse/Trino integration green
+- [x] MLOps integration green
+- [x] Serving alert de-duplication green
+- [x] Helm render/lint green
+- [x] Docker Compose validation green
+- [x] Static platform validation green
+- [x] Immutable cloud image deployment contract validated
+- [x] Current validation report aligned with repository state
+
+## 7. Remaining operational actions outside this repository
+
+These are deployment/operations activities, not unfinished application code:
+
+- Configure real cloud secrets and workload identity.
+- Provision the selected AWS/Azure/GCP environment with Terraform.
+- Install the Spark Operator and required cluster integrations.
+- Run the heavy full-stack E2E gate before a production release.
+- Record the released immutable GHCR image tag and MLflow production ensemble run ID.
+
+**Repository status at the validation point:** application code, tests, deployment contracts, and documented local/cloud boundaries are implemented and CI-validated. No remaining repository-level blocker was identified in the final validation pass.
