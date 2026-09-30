@@ -28,6 +28,7 @@ from processing.common.spark_session import get_spark
 from processing.lakehouse.iceberg_tables import write_micro_batch
 from processing.features.fraud_features import add_fraud_features
 from processing.ml.inference import apply_ml_ensemble, load_models
+from processing.ml.registry import decision_threshold
 from processing.monitoring.metrics import (
     fraud_alerts_total, fraud_batches_total, fraud_batch_duration_seconds,
     fraud_decisions_total, fraud_quarantined_total, fraud_ml_probability,
@@ -304,7 +305,7 @@ def main(argv=None):
     ap.add_argument("--checkpoint", default=os.getenv("STREAMING_CHECKPOINT", "hdfs://namenode:8020/checkpoints/bronze_silver"))
     ap.add_argument("--commit-root", default=os.getenv("BATCH_COMMIT_ROOT", DEFAULT_BATCH_COMMITS))
     ap.add_argument("--ml-model-dir", default=os.getenv("ML_MODEL_DIR"))
-    ap.add_argument("--ml-threshold", type=float, default=float(os.getenv("ML_THRESHOLD", "0.70")))
+    ap.add_argument("--ml-threshold", type=float, default=decision_threshold())
     ap.add_argument(
         "--rules-only",
         action="store_true",
