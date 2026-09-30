@@ -33,3 +33,11 @@ def test_mlflow_overlay_is_pinned_and_wired():
     assert config["registry"]["decision_threshold"] == 0.70
     assert config["registry"]["min_validation_auc"] >= 0.5
     assert len(config["registry"]["members"]) == 3
+
+
+def test_streaming_threshold_uses_registry_contract():
+    source = (
+        ROOT / "processing" / "streaming" / "bronze_silver_job.py"
+    ).read_text(encoding="utf-8")
+    assert "from processing.ml.registry import decision_threshold" in source
+    assert 'default=decision_threshold()' in source
