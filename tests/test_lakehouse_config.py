@@ -20,4 +20,6 @@ def test_lakehouse_overlay_is_pinned_and_wired():
     assert "s3.aws-access-key=rustfsadmin" in text
     assert "s3.aws-secret-key=rustfsadmin" in text
     assert services["spark-master"]["environment"]["ICEBERG_ENABLED"] == "true"
+    from processing.lakehouse.iceberg_tables import TABLES
+    assert TABLES["features"] == "features.transaction_features"
     assert services["spark-worker"]["environment"]["ICEBERG_ENABLED"] == "true"
