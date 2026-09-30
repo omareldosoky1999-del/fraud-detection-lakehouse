@@ -25,7 +25,7 @@ from pathlib import Path
 from pyspark.sql import DataFrame, Window, functions as F
 
 from processing.common.spark_session import get_spark
-from processing.lakehouse.iceberg_tables import write_micro_batch
+from processing.lakehouse.iceberg_tables import TABLES, write_micro_batch
 from processing.features.fraud_features import add_fraud_features
 from processing.ml.inference import apply_ml_ensemble, load_models
 from processing.ml.registry import decision_threshold
@@ -218,7 +218,10 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
         ).cache()
         if silver.rdd.isEmpty():
             silver.unpersist()
-            mark_committed(spark, commit_root, batch_token)
+            if iceberg_enabled and not legacy_hdfs_enabled:
+                mark_committed_iceberg(spark, iceberg_catalog, batch_token)
+            else:
+                mark_committed(spark, commit_root, batch_token)
             return
 
         if legacy_hdfs_enabled:
@@ -236,7 +239,10 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
         if batch_min_event_time is None:
             silver.unpersist()
             batch_transactions.unpersist()
-            mark_committed(spark, commit_root, batch_token)
+            if iceberg_enabled and not legacy_hdfs_enabled:
+                mark_committed_iceberg(spark, iceberg_catalog, batch_token)
+            else:
+                mark_committed(spark, commit_root, batch_token)
             return
 
         history_start = batch_min_event_time - timedelta(hours=history_hours)
