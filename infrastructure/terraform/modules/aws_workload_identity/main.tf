@@ -1,23 +1,3 @@
-variable "name" {
-  type = string
-}
-
-variable "cluster_name" {
-  type = string
-}
-
-variable "namespace" {
-  type = string
-}
-
-variable "service_account" {
-  type = string
-}
-
-variable "bucket_arn" {
-  type = string
-}
-
 data "aws_iam_policy_document" "assume_role" {
   statement {
     sid    = "AllowEksPodIdentity"
