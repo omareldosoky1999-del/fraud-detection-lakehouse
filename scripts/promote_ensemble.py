@@ -21,10 +21,25 @@ def promote(
 
     candidate_name = candidate or candidate_alias(registry_config)
     production_name = production or production_alias(registry_config)
+    members = registry_members(registry_config)
+    expected_members = {
+        member["logical_name"]
+        for member in members
+    }
+    if expected_members != {
+        "logistic_regression",
+        "random_forest",
+        "gbt",
+    }:
+        raise RuntimeError(
+            "Fraud ensemble registry contract must contain exactly "
+            "logistic_regression, random_forest and gbt."
+        )
+
     versions = []
     release_ids = set()
 
-    for member in registry_members(registry_config):
+    for member in members:
         name = member["registered_name"]
         version = client.get_model_version_by_alias(name, candidate_name)
         if version.tags.get('validation_status') != 'PASSED':
