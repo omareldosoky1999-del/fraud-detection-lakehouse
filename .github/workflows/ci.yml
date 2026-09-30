@@ -27,7 +27,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-          pip install pyspark==3.5.1 pandas pyarrow
+          python -c "import pyspark; print('PySpark runtime:', pyspark.__version__)"
 
       - name: Static configuration checks
         run: python -m compileall -q ingestion processing scripts orchestration && python -c "import yaml; yaml.safe_load(open('config/fraud_rules.yml'))"
