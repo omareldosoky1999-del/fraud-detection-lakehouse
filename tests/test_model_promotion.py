@@ -1,0 +1,23 @@
+from pathlib import Path
+import importlib.util
+
+ROOT = Path(__file__).parents[1]
+
+
+def test_promotion_script_validates_candidate_release():
+    path = ROOT / 'scripts' / 'promote_ensemble.py'
+    spec = importlib.util.spec_from_file_location('promote_ensemble', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert hasattr(module, 'promote')
+    assert '--expected-run-id' in path.read_text(encoding='utf-8')
+
+
+def test_registry_contract_separates_candidate_and_production():
+    import yaml
+    config = yaml.safe_load(
+        (ROOT / 'config' / 'ml_models.yml').read_text(encoding='utf-8')
+    )['registry']
+    assert config['candidate_alias'] != config['production_alias']
+    assert config['candidate_alias'] == 'candidate'
+    assert config['production_alias'] == 'production'
