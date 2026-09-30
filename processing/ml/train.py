@@ -431,6 +431,7 @@ def main(argv=None):
         experiment=args.experiment,
         registry_config=args.registry_config,
         promote_alias=args.promote_alias,
+        ml_threshold=args.ml_threshold,
     )
 
 
