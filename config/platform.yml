@@ -27,3 +27,4 @@ lineage:
   backend: "marquez"
   openlineage: "1.53.0"
   marquez: "0.51.1"
+  airflow_provider: "1.14.0"
