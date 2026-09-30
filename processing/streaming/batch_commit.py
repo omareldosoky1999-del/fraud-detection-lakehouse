@@ -41,7 +41,7 @@ def build_batch_token(batch_df: DataFrame, batch_id: int) -> str:
 
 
 def batch_path(base_path: str, batch_token: str) -> str:
-    return f"{base_path.rstrip("/")}/batch_token={batch_token}"
+    return f"{base_path.rstrip('/')}/batch_token={batch_token}"
 
 
 def _fs(spark, path: str):
@@ -70,7 +70,7 @@ def delete_path(spark, path: str) -> None:
 
 
 def commit_marker_path(commit_root: str, batch_token: str) -> str:
-    return f"{commit_root.rstrip("/")}/batch_token={batch_token}/COMMITTED"
+    return f"{commit_root.rstrip('/')}/batch_token={batch_token}/COMMITTED"
 
 
 def is_committed(spark, commit_root: str, batch_token: str) -> bool:
