@@ -1,7 +1,7 @@
 # Fraud Detection Platform — Final Validation Report
 
 **Validation date:** 2026-09-30  
-**Current main:** `acc23e55adc8324e69d18d0e7236b78ae9e98aa9`
+**Current main:** `9b041ef9cbec3f332713a88c53eb888411a896dd`
 
 This report supersedes the earlier baseline-review report. The repository is now validated as a layered, cloud-ready fraud detection platform with Iceberg/Polaris as the active analytical path and HDFS/Hive retained only as a migration-era compatibility path.
 
@@ -58,11 +58,11 @@ Control-plane components include MLflow, OpenLineage/Marquez, Prometheus/Grafana
 
 | Gate | Run | Result |
 |---|---:|---|
-| CI | #520 | PASS |
-| CodeQL | #226 | PASS |
+| CI | #523 | PASS |
+| CodeQL | #229 | PASS |
 | Quality E2E | #18 | PASS |
 
-The current CI run executed **137 tests successfully with 8 warnings**. It also completed Python syntax checks, YAML validation, static platform validation, Docker Compose validation, Helm rendering/linting, and the informational fraud-rule precision/recall evaluation.
+The current CI run executed **137 tests successfully with 8 warnings**. The CI workflow now uses Node 24-compatible current major actions for checkout, Python setup, Java setup and Helm setup. It also completed Python syntax checks, YAML validation, static platform validation, Docker Compose validation, Helm rendering/linting, and the informational fraud-rule precision/recall evaluation.
 
 ### Latest relevant integration gates
 
@@ -70,7 +70,7 @@ The repository intentionally uses path-triggered layer-specific workflows plus a
 
 | Capability | Latest successful validation |
 |---|---|
-| Container build | Container Build #55 |
+| Container build | Container Build #56 |
 | Iceberg / Polaris / RustFS / Trino | Lakehouse E2E #65 |
 | Spark MLlib -> MLflow Registry | MLOps E2E #46 |
 | Serving alert de-duplication | Serving E2E #14 |
