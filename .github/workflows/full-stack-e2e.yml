@@ -46,6 +46,15 @@ jobs:
       - name: Create Kafka topics
         run: docker exec kafka bash /kafka-scripts/create-topics.sh kafka:9092
 
+      - name: Wait for HBase readiness
+        run: |
+          for i in $(seq 1 40); do
+            docker exec hbase bash -lc "echo 'status' | hbase shell -n >/dev/null 2>&1" && exit 0
+            sleep 3
+          done
+          docker logs hbase
+          exit 1
+
       - name: Wait for serving API
         run: |
           for i in $(seq 1 40); do
@@ -137,6 +146,15 @@ jobs:
           docker exec trino trino --file /tmp/semantic_views.sql
           docker exec trino trino --execute \
             "SELECT count(*) FROM polaris.analytics.fraud_transaction_risk WHERE decision <> 'PASS'"
+
+      - name: Evaluate end-to-end fraud decisions
+        run: |
+          docker exec spark-master bash -lc "rm -rf /tmp/full-stack-decisions && hdfs dfs -get /warehouse/gold/fraud_decisions /tmp/full-stack-decisions"
+          python scripts/evaluate_rules.py \
+            --decisions /tmp/full-stack-decisions \
+            --labels /tmp/full-stack-ground-truth.csv \
+            --out /tmp/full-stack-fraud-report.txt
+          grep -E 'precision=|recall=|f1=' /tmp/full-stack-fraud-report.txt
 
       - name: Verify alert consumer deduplication
         run: |
