@@ -10,6 +10,8 @@ TABLES = {
     "silver": "silver.transactions",
     "features": "features.transaction_features",
     "decisions": "gold.fraud_decisions",
+    "customer_daily_risk": "gold.customer_daily_risk",
+    "daily_kpis": "gold.daily_kpis",
 }
 
 PARTITIONS = {
@@ -18,6 +20,8 @@ PARTITIONS = {
     "silver": ["event_date"],
     "features": ["event_date"],
     "decisions": ["event_date"],
+    "customer_daily_risk": ["event_date"],
+    "daily_kpis": ["event_date"],
 }
 
 
@@ -173,3 +177,31 @@ def write_micro_batch(
             "__iceberg_decisions_schema",
             batch_token,
         )
+
+
+def write_gold_tables(
+    spark: SparkSession,
+    *,
+    catalog: str,
+    customer_daily_risk: DataFrame,
+    daily_kpis: DataFrame,
+) -> None:
+    """Write batch Gold aggregates as event-date partitioned Iceberg tables."""
+    for logical_name, frame, temp_view in (
+        (
+            "customer_daily_risk",
+            customer_daily_risk,
+            "__iceberg_customer_daily_risk_schema",
+        ),
+        ("daily_kpis", daily_kpis, "__iceberg_daily_kpis_schema"),
+    ):
+        table = _qualified(catalog, TABLES[logical_name])
+        _ensure_namespace(spark, catalog, "gold")
+        _ensure_table(
+            spark,
+            table,
+            frame,
+            PARTITIONS[logical_name],
+            temp_view,
+        )
+        frame.writeTo(table).overwritePartitions()
