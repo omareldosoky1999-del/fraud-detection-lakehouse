@@ -10,7 +10,11 @@ metadata:
 spec:
   type: Python
   mode: cluster
-  image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag | quote }}
+  {{- $imageTag := .Values.image.tag -}}
+  {{- if .Values.image.immutableTag -}}
+  {{- $imageTag = .Values.image.immutableTag -}}
+  {{- end }}
+  image: {{ printf "%s:%s" .Values.image.repository $imageTag | quote }}
   imagePullPolicy: {{ .Values.image.pullPolicy }}
   sparkVersion: {{ .Values.spark.version | quote }}
   mainApplicationFile: {{ .Values.spark.mainApplicationFile | quote }}
@@ -33,6 +37,11 @@ spec:
   envVars:
 {{- range $key, $value := .Values.env }}
     {{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- if .Values.runtimeSecret.existingSecret }}
+  envFrom:
+    - secretRef:
+        name: {{ .Values.runtimeSecret.existingSecret | quote }}
 {{- end }}
   sparkConf:
     spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
