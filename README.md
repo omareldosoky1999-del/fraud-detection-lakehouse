@@ -1,6 +1,6 @@
 # Real-Time Fraud Detection Data Platform
 
-Kafka + Schema Registry + Spark Structured Streaming + HDFS/Hive + HBase + Airflow + Prometheus/Grafana, with optional Spark MLlib ensemble scoring.
+Kafka + Schema Registry + Spark 3.5.9 Structured Streaming + HDFS/Hive + HBase + Airflow + Prometheus/Grafana, with Spark MLlib ensemble scoring.
 
 ## Pipeline
 
@@ -11,7 +11,7 @@ Synthetic Generator
        -> Bronze (raw decoded events)
        -> DQ / Quarantine
        -> Silver (Decimal money + FX)
-       -> Config-driven Rules + optional MLlib ensemble
+       -> Config-driven Rules + MLlib ensemble (core decision signal)
        -> Fraud Decisions
             -> HBase current-risk API
             -> Kafka fraud.alerts (deterministic alert_id)
@@ -32,7 +32,7 @@ Business thresholds are in `config/fraud_rules.yml`, not hard-coded in the rules
 
 ## MLlib
 
-`processing/ml/train.py` trains Logistic Regression, Random Forest and GBT pipelines. Pass `--ml-model-dir models/fraud_ensemble` to the streaming job to enable ensemble scoring; without a model directory, the rules-only path remains the default.
+`processing/ml/train.py` trains Logistic Regression, Random Forest and GBT pipelines with a time-based validation split. The current artifact format is file-based; the MLOps phase will move tracking, versioning and promotion into MLflow Model Registry.
 
 ## Serving
 
@@ -53,7 +53,7 @@ Prometheus scrapes Kafka Exporter and the Spark driver metrics endpoint. Grafana
 
 ## Known environment limitations
 
-The bundled deployment is single-host and academic: one Kafka broker, one HDFS datanode, one HBase node, SQLite Airflow metadata, plaintext internal networking, and an Airflow Docker-socket mount. The Docker Spark cluster remains on the existing Spark 3.0.0 image; local CI can use a newer PySpark for API-compatible tests, but a containerized integration test on the exact image should be run before release.
+The bundled deployment is single-host and academic: one Kafka broker, one HDFS datanode, one HBase node, SQLite Airflow metadata, plaintext internal networking, and an Airflow Docker-socket mount. Phase 1 standardizes Docker and CI on Spark 3.5.9 with Java 17 before the Iceberg/MinIO/Polaris/Trino migration.
 
 ## Start
 
