@@ -21,11 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Start serving stack
+      - name: Start Kafka and alert consumer only
         run: |
           docker compose \
             -f docker/docker-compose.yml \
-            --profile serving up -d --build
+            --profile serving up -d --build zookeeper kafka alert-consumer
 
       - name: Wait for alert consumer
         run: |
@@ -60,7 +60,7 @@ jobs:
         run: |
           docker compose \
             -f docker/docker-compose.yml \
-            --profile serving logs --no-color --tail=500
+            --profile serving logs --no-color --tail=500 kafka alert-consumer
 
       - name: Tear down
         if: always()
