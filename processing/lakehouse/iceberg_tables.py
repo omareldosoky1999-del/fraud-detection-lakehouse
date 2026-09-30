@@ -8,6 +8,7 @@ TABLES = {
     "bronze": "bronze.transactions",
     "quarantine": "quality.quarantine",
     "silver": "silver.transactions",
+    "features": "features.transaction_features",
     "decisions": "gold.fraud_decisions",
 }
 
@@ -68,6 +69,7 @@ def write_micro_batch(
     quarantine: DataFrame | None,
     silver: DataFrame | None,
     decisions: DataFrame | None,
+    features: DataFrame | None = None,
 ) -> None:
     """Persist one micro-batch to Iceberg.
 
@@ -108,6 +110,15 @@ def write_micro_batch(
             _qualified(catalog, TABLES["silver"]),
             ["batch_token", "event_date"],
             "__iceberg_silver_schema",
+        )
+
+    if features is not None:
+        _overwrite_partitions(
+            spark,
+            features,
+            _qualified(catalog, TABLES["features"]),
+            ["batch_token", "event_date"],
+            "__iceberg_features_schema",
         )
 
     if decisions is not None:
