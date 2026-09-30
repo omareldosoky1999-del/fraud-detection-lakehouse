@@ -70,4 +70,4 @@ def test_features_are_causal_and_point_in_time(spark):
     assert rows[2].amount_to_prior_avg == pytest.approx(2.0)
     assert rows[3].txn_count_5m == 1.0
     assert rows[3].amount_sum_1h == 400.0
-    assert rows[3].seconds_since_prev_txn == pytest.approx(120 * 60 - 120, abs=1e-6) is not None
+    assert rows[3].seconds_since_prev_txn == pytest.approx(7080.0)
