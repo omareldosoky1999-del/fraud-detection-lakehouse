@@ -1,0 +1,63 @@
+name: Lineage E2E
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "docker/docker-compose.yml"
+      - "docker/docker-compose.lineage.yml"
+      - "docker/spark/**"
+      - "docker/airflow/**"
+      - "processing/common/spark_session.py"
+      - "scripts/openlineage_smoke.py"
+      - "tests/test_lineage_config.py"
+      - ".github/workflows/lineage-e2e.yml"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start lineage stack
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lineage.yml             --profile lineage --profile orchestration up -d --build
+
+      - name: Show service status
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lineage.yml             --profile lineage --profile orchestration ps
+
+      - name: Run Spark lineage workload
+        run: |
+          docker exec spark-master             /opt/spark/bin/spark-submit             --master spark://spark-master:7077             /app/scripts/openlineage_smoke.py
+
+      - name: Verify Marquez received Spark lineage
+        run: |
+          for i in $(seq 1 20); do
+            RESPONSE=$(curl -fsS "http://localhost:5002/api/v1/namespaces/fraud_detection/jobs" || true)
+            echo "$RESPONSE"
+            echo "$RESPONSE" | grep -q "openlineage-spark-smoke" && exit 0
+            sleep 3
+          done
+          echo "Spark lineage job was not visible in Marquez"
+          exit 1
+
+      - name: Verify Airflow OpenLineage configuration
+        run: |
+          docker exec airflow             python -c "from airflow.configuration import conf; import json; print(conf.get('openlineage','namespace')); print(conf.get('openlineage','transport'))"
+
+      - name: Capture logs on failure
+        if: failure()
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lineage.yml             --profile lineage --profile orchestration logs --no-color --tail=500
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lineage.yml             --profile lineage --profile orchestration down -v
