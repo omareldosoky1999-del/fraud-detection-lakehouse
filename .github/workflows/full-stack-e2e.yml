@@ -62,7 +62,7 @@ jobs:
 
       - name: Train candidate fraud ensemble
         run: |
-          docker exec spark-master bash -lc '
+          docker exec -e GIT_COMMIT_SHA="$GITHUB_SHA" spark-master bash -lc '
             set -o pipefail
             /opt/spark/bin/spark-submit \
               --master spark://spark-master:7077 \
