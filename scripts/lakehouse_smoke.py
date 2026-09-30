@@ -1,6 +1,8 @@
 """Smoke-test Spark -> Polaris REST -> MinIO -> Iceberg connectivity."""
 from __future__ import annotations
 
+import argparse
+
 from pyspark.sql import functions as F
 from processing.common.spark_session import get_spark
 
@@ -10,7 +12,7 @@ NAMESPACE = "e2e_smoke"
 TABLE = f"{CATALOG}.{NAMESPACE}.transactions"
 
 
-def main() -> None:
+def main(keep: bool = False) -> None:
     spark = get_spark("lakehouse-smoke", enable_hive=False)
     try:
         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {CATALOG}.{NAMESPACE}")
@@ -37,11 +39,15 @@ def main() -> None:
         ]
         print(f"[LAKEHOUSE_SMOKE] Spark read/write OK: {TABLE}")
 
-        spark.sql(f"DROP TABLE IF EXISTS {TABLE}")
-        spark.sql(f"DROP NAMESPACE IF EXISTS {CATALOG}.{NAMESPACE}")
+        if not keep:
+            spark.sql(f"DROP TABLE IF EXISTS {TABLE}")
+            spark.sql(f"DROP NAMESPACE IF EXISTS {CATALOG}.{NAMESPACE}")
     finally:
         spark.stop()
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--keep", action="store_true", help="keep the smoke table for downstream Trino verification")
+    args = parser.parse_args()
+    main(keep=args.keep)
