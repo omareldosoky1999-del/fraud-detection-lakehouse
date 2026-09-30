@@ -1,0 +1,12 @@
+quality:
+  silver:
+    not_null_columns:
+      - transaction_id
+      - client_id
+      - event_time
+      - currency
+      - country_src
+    non_negative:
+      - column: amount_usd
+        min_value: 0
+        strict_min: false
