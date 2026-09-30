@@ -1,0 +1,37 @@
+name: Terraform Validate
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "infrastructure/terraform/**"
+      - ".github/workflows/terraform-validate.yml"
+  pull_request:
+    paths:
+      - "infrastructure/terraform/**"
+      - ".github/workflows/terraform-validate.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+      - name: Terraform format check
+        run: terraform fmt -check -recursive infrastructure/terraform
+      - name: Validate environments
+        shell: bash
+        run: |
+          set -euo pipefail
+          for dir in local aws azure gcp; do
+            echo "=== $dir ==="
+            terraform -chdir="infrastructure/terraform/environments/$dir" init -backend=false -input=false
+            terraform -chdir="infrastructure/terraform/environments/$dir" validate
+          done
