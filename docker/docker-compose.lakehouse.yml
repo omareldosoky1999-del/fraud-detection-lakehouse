@@ -1,4 +1,30 @@
 services:
+  spark-master:
+    depends_on:
+      polaris-setup: {condition: service_completed_successfully}
+    environment:
+      ICEBERG_ENABLED: "true"
+      ICEBERG_CATALOG_NAME: polaris
+      POLARIS_URI: http://polaris:8181/api/catalog
+      POLARIS_WAREHOUSE: fraud
+      POLARIS_CREDENTIAL: root:s3cr3t
+      ICEBERG_S3_ENDPOINT: http://minio:9000
+      ICEBERG_S3_ACCESS_KEY: polaris_root
+      ICEBERG_S3_SECRET_KEY: polaris_pass
+
+  spark-worker:
+    depends_on:
+      spark-master: {condition: service_started}
+      polaris-setup: {condition: service_completed_successfully}
+    environment:
+      ICEBERG_ENABLED: "true"
+      ICEBERG_CATALOG_NAME: polaris
+      POLARIS_URI: http://polaris:8181/api/catalog
+      POLARIS_WAREHOUSE: fraud
+      POLARIS_CREDENTIAL: root:s3cr3t
+      ICEBERG_S3_ENDPOINT: http://minio:9000
+      ICEBERG_S3_ACCESS_KEY: polaris_root
+      ICEBERG_S3_SECRET_KEY: polaris_pass
   postgres:
     image: postgres:16.15-alpine3.23
     container_name: polaris-postgres
@@ -113,7 +139,7 @@ services:
           -H "Authorization: Bearer $$TOKEN" \
           -H 'Polaris-Realm: POLARIS' \
           -H 'Content-Type: application/json' \
-          -d '{"catalog":{"name":"'"$${CATALOG_NAME}"'","type":"INTERNAL","readOnly":false,"properties":{"default-base-location":"s3://iceberg"},"storageConfigInfo":{"storageType":"S3","allowedLocations":["s3://iceberg"],"endpoint":"http://localhost:9000","endpointInternal":"http://minio:9000","pathStyleAccess":true,"region":"us-east-1"}}}')
+          -d '{"catalog":{"name":"'"$${CATALOG_NAME}"'","type":"INTERNAL","readOnly":false,"properties":{"default-base-location":"s3://iceberg"},"storageConfigInfo":{"storageType":"S3","allowedLocations":["s3://iceberg"],"endpoint":"http://minio:9000","endpointInternal":"http://minio:9000","stsUnavailable":true,"pathStyleAccess":true,"region":"us-east-1"}}}')
         case "$$RESPONSE" in
           200|201|409) echo "Polaris catalog '$${CATALOG_NAME}' ready (HTTP $$RESPONSE)" ;;
           *) cat /tmp/catalog.json >&2; exit 1 ;;
