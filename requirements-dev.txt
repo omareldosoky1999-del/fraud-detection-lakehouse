@@ -13,3 +13,4 @@ pyarrow>=14
 #   pip install pyspark==3.0.3   (needs Java 8/11, matches the cluster exactly)
 # Both were validated against this test suite; only Spark-API calls available
 # since 3.0.0 are used in processing/, so either works for local testing.
+pyspark==3.5.9
