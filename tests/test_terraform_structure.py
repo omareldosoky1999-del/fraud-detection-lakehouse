@@ -33,3 +33,30 @@ def test_cloud_network_modules_exist():
         assert (path / "main.tf").exists()
         assert (path / "variables.tf").exists()
         assert (path / "outputs.tf").exists()
+
+
+
+def test_workload_identity_modules_exist():
+    for module, marker in {
+        "aws_workload_identity": "aws_eks_pod_identity_association",
+        "azure_workload_identity": "azurerm_federated_identity_credential",
+        "gcp_workload_identity": "google_service_account_iam_member",
+    }.items():
+        text = (ROOT / "modules" / module / "main.tf").read_text(encoding="utf-8")
+        assert marker in text
+
+
+def test_aws_eks_includes_pod_identity_agent():
+    text = (ROOT / "modules" / "aws_eks" / "main.tf").read_text(encoding="utf-8")
+    assert 'addon_name   = "eks-pod-identity-agent"' in text
+
+
+def test_cloud_environments_export_workload_identity_reference():
+    expected = {
+        "aws": 'workload_identity_role_arn',
+        "azure": 'workload_identity_client_id',
+        "gcp": 'workload_identity_service_account_email',
+    }
+    for env, marker in expected.items():
+        text = (ROOT / "environments" / env / "outputs.tf").read_text(encoding="utf-8")
+        assert f'output "{marker}"' in text
