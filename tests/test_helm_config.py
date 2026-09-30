@@ -26,3 +26,15 @@ def test_helm_supports_immutable_image_and_runtime_secret():
     assert "existingSecret" in values["runtimeSecret"]
     assert "$imageTag" in app
     assert "secretRef" in app
+
+
+
+def test_cloud_values_define_workload_identity_contracts():
+    azure = yaml.safe_load((ROOT / "values-azure.yaml").read_text(encoding="utf-8"))
+    gcp = yaml.safe_load((ROOT / "values-gcp.yaml").read_text(encoding="utf-8"))
+    aws = yaml.safe_load((ROOT / "values-aws.yaml").read_text(encoding="utf-8"))
+
+    assert azure["serviceAccount"]["podLabels"]["azure.workload.identity/use"] == "true"
+    assert azure["serviceAccount"]["annotations"] == {}
+    assert gcp["serviceAccount"]["annotations"] == {}
+    assert aws["serviceAccount"]["annotations"] == {}
