@@ -76,14 +76,19 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
                           commit_root=None,
                           hbase_host, hbase_port, kafka_bootstrap, alerts_topic,
                           history_hours=HISTORY_LOOKBACK_HOURS, ml_model_dir=None, ml_threshold=0.70,
-                          iceberg_enabled=None, iceberg_catalog=None):
+                          ml_required=True, iceberg_enabled=None, iceberg_catalog=None):
     commit_root = commit_root or f"{decisions_path.rstrip('/')} /_batch_commits".replace(" /", "/")
     if iceberg_enabled is None:
         iceberg_enabled = os.getenv("ICEBERG_ENABLED", "false").lower() == "true"
     if iceberg_catalog is None:
         iceberg_catalog = os.getenv("ICEBERG_CATALOG_NAME", "polaris")
     hbase_factory = build_connection_factory(hbase_host, hbase_port) if hbase_host else None
-    ml_models = load_models(ml_model_dir) if ml_model_dir else []
+    ml_models = load_models(ml_model_dir)
+    if ml_required and not ml_models:
+        raise RuntimeError(
+            "ML is required for the fraud decision pipeline, but no production "
+            "MLflow models or local model artifacts were resolved."
+        )
     spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
     start_metrics_server()
 
@@ -241,6 +246,7 @@ def run(args):
         alerts_topic=args.alerts_topic,
         ml_model_dir=args.ml_model_dir,
         ml_threshold=args.ml_threshold,
+        ml_required=not args.rules_only,
         iceberg_enabled=not args.no_iceberg,
         iceberg_catalog=args.iceberg_catalog,
     )
@@ -269,6 +275,11 @@ def main(argv=None):
     ap.add_argument("--commit-root", default=os.getenv("BATCH_COMMIT_ROOT", DEFAULT_BATCH_COMMITS))
     ap.add_argument("--ml-model-dir", default=os.getenv("ML_MODEL_DIR"))
     ap.add_argument("--ml-threshold", type=float, default=float(os.getenv("ML_THRESHOLD", "0.70")))
+    ap.add_argument(
+        "--rules-only",
+        action="store_true",
+        help="Explicit legacy/test mode that disables the ML-required startup gate.",
+    )
     ap.add_argument("--iceberg-catalog", default=os.getenv("ICEBERG_CATALOG_NAME", "polaris"))
     ap.add_argument("--no-iceberg", action="store_true")
     ap.add_argument("--hbase-host", default=os.getenv("HBASE_HOST", "hbase"))
