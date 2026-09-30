@@ -1,8 +1,8 @@
 """Write fraud decisions to HBase for low-latency point lookups
 (e.g. "what is client X's current risk state" for a card-authorization check).
 
-This is intentionally NOT the system of record (that's the Silver/Gold
-Parquet tables on HDFS, queryable historically via Hive). HBase here is a
+This is intentionally NOT the system of record (that is the Silver/Gold
+Iceberg tables, queryable through Trino). HBase here is a
 serving cache: one row per client, overwritten on every new decision, keyed
 so a lookup by client_id is O(1).
 
