@@ -28,11 +28,11 @@ jobs:
 
       - name: Start Lakehouse and MLOps stack
         run: |
-          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             -f docker/docker-compose.mlflow.yml             --profile lakehouse --profile mlops up -d --build
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.mlflow.yml             --profile mlops up -d --build
 
       - name: Show service status
         run: |
-          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             -f docker/docker-compose.mlflow.yml             --profile lakehouse --profile mlops ps
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.mlflow.yml             --profile mlops ps
 
       - name: Spark MLlib -> MLflow Registry smoke test
         run: |
@@ -45,9 +45,9 @@ jobs:
       - name: Capture logs on failure
         if: failure()
         run: |
-          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             -f docker/docker-compose.mlflow.yml             --profile lakehouse --profile mlops logs --no-color --tail=500
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.mlflow.yml             --profile mlops logs --no-color --tail=500
 
       - name: Tear down
         if: always()
         run: |
-          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.lakehouse.yml             -f docker/docker-compose.mlflow.yml             --profile lakehouse --profile mlops down -v
+          docker compose             -f docker/docker-compose.yml             -f docker/docker-compose.mlflow.yml             --profile mlops down -v
