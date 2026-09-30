@@ -117,6 +117,7 @@ def train(
 
     registry = load_registry_config(registry_config)
     alias = promote_alias or os.getenv("MLFLOW_PROMOTE_ALIAS", registry.get("alias", "production"))
+    min_validation_auc = float(os.getenv("MLFLOW_MIN_VALIDATION_AUC", registry.get("min_validation_auc", 0.65)))
     members = {m["logical_name"]: m["registered_name"] for m in registry_members(registry_config)}
 
     spark = get_spark("fraud-ml-train", enable_hive=False)
@@ -200,6 +201,13 @@ def train(
 
                 model.write().overwrite().save(str(out / logical_name))
 
+                if auc < min_validation_auc:
+                    raise RuntimeError(
+                        f"{logical_name} validation AUC {auc:.4f} is below the "
+                        f"production threshold {min_validation_auc:.4f}; ensemble "
+                        "promotion is blocked."
+                    )
+
                 registered_name = members[logical_name]
                 mlflow.log_metric(f"{logical_name}_validation_auc", auc)
 
@@ -216,6 +224,7 @@ def train(
                         "ensemble_run_id": run.info.run_id,
                         "spark_version": spark.version,
                         "validation_strategy": "time_based_80_20",
+                        "promotion_threshold": min_validation_auc,
                     },
                 )
                 registered_versions[logical_name] = {
@@ -225,6 +234,7 @@ def train(
 
                 metrics[logical_name] = {
                     "validation_auc": auc,
+                    "min_validation_auc": min_validation_auc,
                     "registered_name": registered_name,
                     "registry_version": str(version),
                     "production_alias": alias,
