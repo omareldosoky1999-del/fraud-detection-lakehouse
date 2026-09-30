@@ -30,7 +30,8 @@ from processing.features.fraud_features import add_fraud_features
 from processing.ml.inference import apply_ml_ensemble, load_models
 from processing.monitoring.metrics import (
     fraud_alerts_total, fraud_batches_total, fraud_batch_duration_seconds,
-    fraud_decisions_total, fraud_quarantined_total, start_metrics_server,
+    fraud_decisions_total, fraud_quarantined_total, fraud_ml_probability,
+    fraud_feature_rows_total, start_metrics_server,
 )
 from processing.rules.rules_engine import apply_rules
 from processing.serving.alerts_sink import write_alerts
@@ -196,6 +197,17 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
                 decisions=decided_batch,
                 features=feature_batch,
             )
+
+        if fraud_feature_rows_total is not None:
+            fraud_feature_rows_total.inc(feature_batch.count())
+        if fraud_ml_probability is not None:
+            probability_summary = (
+                decided_batch
+                .select(F.avg("ml_probability").alias("avg_ml_probability"))
+                .first()
+            )
+            if probability_summary and probability_summary["avg_ml_probability"] is not None:
+                fraud_ml_probability.observe(float(probability_summary["avg_ml_probability"]))
 
         if hbase_factory:
             latest_w = (Window.partitionBy("client_id")
