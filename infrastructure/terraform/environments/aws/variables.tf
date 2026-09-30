@@ -92,3 +92,12 @@ variable "eks_node_max" {
   type    = number
   default = 4
 }
+variable "workload_namespace" {
+  type    = string
+  default = "fraud-platform"
+}
+
+variable "workload_service_account" {
+  type    = string
+  default = "fraud-spark"
+}
