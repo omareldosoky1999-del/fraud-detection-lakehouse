@@ -13,3 +13,7 @@ def test_compose_has_no_latest_and_persistent_state():
     assert "hbase_data:/hbase-data" in text
     assert "zookeeper_data:/data" in text
     assert "kafka" not in data["services"]["kafka"].get("profiles", [])
+
+    assert "alert-consumer" in data["services"]
+    assert "alerts-data:/data" in text
+    assert "fraud.alerts" in data["services"]["alert-consumer"]["command"]
