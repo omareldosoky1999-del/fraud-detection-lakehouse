@@ -10,5 +10,6 @@ def test_ml_retraining_dag_is_manual_and_mlflow_gated():
     assert 'schedule_interval=None' in text
     assert 'max_active_runs=1' in text
     assert 'http://mlflow:5000/health' in text
-    assert '--promote-alias production' in text
+    assert '--promote-alias candidate' in text
+    assert '--promote-alias production' not in text
     assert 'docker exec spark-master' in text
