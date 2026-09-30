@@ -1,6 +1,7 @@
 image:
   repository: ghcr.io/omareldosoky1999-del/fraud-detection-lakehouse/spark-app
   tag: latest
+  immutableTag: ""
   pullPolicy: IfNotPresent
 
 spark:
@@ -42,3 +43,6 @@ environment:
 resources:
   driver: {}
   executor: {}
+
+runtimeSecret:
+  existingSecret: ""
