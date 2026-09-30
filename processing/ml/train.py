@@ -119,6 +119,13 @@ def train(
         or os.getenv("MLFLOW_PROMOTE_ALIAS")
         or candidate_alias(registry_config)
     )
+    production_alias_name = registry.get("production_alias", "production")
+    if alias == production_alias_name:
+        raise ValueError(
+            "Training cannot promote directly to the production alias. "
+            "Train to the candidate alias and use scripts/promote_ensemble.py "
+            "for controlled production promotion."
+        )
     min_validation_auc = float(
         os.getenv(
             "MLFLOW_MIN_VALIDATION_AUC",
