@@ -1,8 +1,8 @@
 """Manual MLOps retraining DAG.
 
-The DAG intentionally defaults to manual trigger. The current trainer uses the
-project's labeled synthetic training source; automatic scheduled promotion is
-not enabled until a governed labeled-data source is connected.
+The DAG intentionally defaults to manual trigger. Training registers a
+validated candidate ensemble only. Production promotion is deliberately
+separate and must use the governed GitHub production workflow.
 """
 from __future__ import annotations
 
@@ -43,16 +43,16 @@ with DAG(
         python_callable=_check_mlflow,
     )
 
-    train_and_promote = BashOperator(
-        task_id="train_validate_register_promote",
+    train_candidate = BashOperator(
+        task_id="train_validate_register_candidate",
         bash_command=(
             "docker exec spark-master /opt/spark/bin/spark-submit "
             "--master spark://spark-master:7077 "
             f"{APP_DIR}/processing/ml/train.py "
             "--n 20000 "
             "--tracking-uri http://mlflow:5000 "
-            "--promote-alias production"
+            "--promote-alias candidate"
         ),
     )
 
-    check_mlflow >> train_and_promote
+    check_mlflow >> train_candidate
