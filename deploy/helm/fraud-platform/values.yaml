@@ -40,6 +40,10 @@ environment:
   name: cloud
   namespace: fraud-platform
 
+serviceAccount:
+  annotations: {}
+  podLabels: {}
+
 resources:
   driver: {}
   executor: {}
