@@ -33,3 +33,19 @@ def test_hbase_healthcheck_is_http_only():
     )
     assert 'curl -fsS http://localhost:16010/master-status' in text
     assert "hbase shell" not in text.split("hbase:")[1].split("hive:")[0]
+
+
+def test_overlay_shared_services_keep_profile_union():
+    import importlib.util
+    module_path = Path(__file__).parents[1] / "scripts" / "validate_stack.py"
+    spec = importlib.util.spec_from_file_location("validate_stack", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    services = module._merge_services(
+        "docker/docker-compose.lakehouse.yml",
+        "docker/docker-compose.mlflow.yml",
+    )
+
+    assert set(services["rustfs"]["profiles"]) == {"lakehouse", "mlops"}
+    assert set(services["rustfs-init"]["profiles"]) == {"lakehouse", "mlops"}
