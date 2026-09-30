@@ -16,4 +16,4 @@ RUN curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-25.
     && rm -rf /tmp/docker.tgz /tmp/docker
 
 USER airflow
-RUN pip install --no-cache-dir requests==2.31.0
+RUN pip install --no-cache-dir requests==2.31.0 apache-airflow-providers-openlineage==1.14.0
