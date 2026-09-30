@@ -1,3 +1,4 @@
+from pathlib import Path
 import shutil
 from datetime import datetime, timedelta
 
@@ -109,3 +110,10 @@ def test_new_device_history_is_available_across_30_days(spark, warehouse):
     decisions = spark.read.parquet(str(warehouse["decisions"]))
     row = decisions.filter("transaction_id = 2").collect()[0]
     assert "NEW_DEVICE_HIGH_VALUE" in row.matched_rules
+
+
+def test_cloud_streaming_code_uses_iceberg_commit_marker_on_empty_filtered_batch():
+    source = (Path(__file__).parents[1] / "processing" / "streaming" / "bronze_silver_job.py").read_text(encoding="utf-8")
+    assert "from processing.lakehouse.iceberg_tables import TABLES, write_micro_batch" in source
+    assert "if iceberg_enabled and not legacy_hdfs_enabled:" in source
+    assert "mark_committed_iceberg(spark, iceberg_catalog, batch_token)" in source
