@@ -86,7 +86,7 @@ with DAG(
     build_gold = BashOperator(
         task_id="spark_submit_build_gold",
         bash_command=(
-            "docker exec spark-master /spark/bin/spark-submit "
+            "docker exec spark-master /opt/spark/bin/spark-submit "
             f"--master spark://spark-master:7077 "
             f"{APP_DIR}/processing/batch/build_gold.py --date {{{{ ds }}}} --lookback-days 2"  # ds already = yesterday, see note above
         ),
