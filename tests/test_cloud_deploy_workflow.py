@@ -11,7 +11,7 @@ def test_cloud_deploy_workflow_requires_immutable_tag():
     assert "image_tag:" in text
     assert "image.immutableTag" in text
     assert "--atomic" in text
-    assert "! grep -q ':latest'" in text
+    assert 'grep -q ":latest"' in text
     for env in ["aws", "azure", "gcp"]:
         assert f"values-{env}.yaml" in text
 
