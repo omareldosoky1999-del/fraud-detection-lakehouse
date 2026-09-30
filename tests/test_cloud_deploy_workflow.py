@@ -50,3 +50,10 @@ def test_airflow_gold_dag_is_iceberg_first():
     assert "--iceberg-table silver.transactions" in text
     assert "processing/batch/build_gold.py" in text
     assert "LEGACY_HDFS_ORCHESTRATION" in text
+
+
+def test_full_stack_e2e_uses_iceberg_for_evaluation():
+    text = (ROOT / ".github" / "workflows" / "full-stack-e2e.yml").read_text(encoding="utf-8")
+    assert "export_iceberg_decisions.py" in text
+    assert "--table gold.fraud_decisions" in text
+    assert "hdfs dfs -get /warehouse/gold/fraud_decisions" not in text
