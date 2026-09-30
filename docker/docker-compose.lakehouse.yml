@@ -82,8 +82,10 @@ services:
     command:
       - -c
       - >-
-        aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket iceberg >/dev/null 2>&1 ||
-        aws --endpoint-url http://rustfs:9000 s3 mb s3://iceberg;
+        for bucket in iceberg mlflow-artifacts; do
+          aws --endpoint-url http://rustfs:9000 s3api head-bucket --bucket "$bucket" >/dev/null 2>&1 ||
+          aws --endpoint-url http://rustfs:9000 s3 mb "s3://$bucket";
+        done;
         aws --endpoint-url http://rustfs:9000 s3 ls
     networks: [fraud-net]
     profiles: [lakehouse]
