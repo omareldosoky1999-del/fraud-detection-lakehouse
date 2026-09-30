@@ -49,7 +49,7 @@ Spark MLlib training
   -> Spark Structured Streaming inference
 ```
 
-The registry contract is in `config/ml_models.yml`. Logistic Regression, Random Forest and GBT are registered as separate ensemble members. Streaming inference resolves their current `production` versions through MLflow aliases instead of hard-coded model files. MLflow's Tracking Server supports PostgreSQL as a backend store and remote object storage for artifacts; aliases are designed to decouple deployed inference code from a specific model version. citeturn347240search2turn347240search3
+The registry contract is in `config/ml_models.yml`. Logistic Regression, Random Forest and GBT are registered as separate ensemble members. Streaming inference resolves their current `production` versions through MLflow aliases instead of hard-coded model files. MLflow's Tracking Server supports PostgreSQL as a backend store and remote object storage for artifacts; aliases are designed to decouple deployed inference code from a specific model version.
 
 ### Start the Lakehouse + MLOps stack
 
