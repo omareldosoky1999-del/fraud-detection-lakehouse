@@ -33,11 +33,29 @@ jobs:
           pip install -r requirements-dev.txt
           python -c "import pyspark; print('PySpark runtime:', pyspark.__version__)"
 
-      - name: Static configuration checks
+      - name: Python syntax checks
+        run: python -m compileall -q ingestion processing scripts orchestration
+
+      - name: YAML configuration checks
         run: |
-          python -m compileall -q ingestion processing scripts orchestration
-          python -c "import yaml; yaml.safe_load(open('config/fraud_rules.yml'))"
-          python scripts/validate_stack.py
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          files = [
+              Path("config/fraud_rules.yml"),
+              Path("config/ml_models.yml"),
+              Path("config/quality/silver.yml"),
+              Path("config/storage_profiles.yml"),
+              Path("config/platform.yml"),
+          ]
+          for path in files:
+              yaml.safe_load(path.read_text(encoding="utf-8"))
+              print(f"YAML OK: {path}")
+          PY
+
+      - name: Static platform validation
+        run: python scripts/validate_stack.py
 
       - name: Validate Docker Compose files
         run: |
