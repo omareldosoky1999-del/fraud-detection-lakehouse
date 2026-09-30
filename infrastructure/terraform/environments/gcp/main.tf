@@ -9,7 +9,7 @@ module "object_storage" {
 module "network" {
   count = var.create_network ? 1 : 0
 
-  source      = "../../modules/gcp_vpc"
+  source = "../../modules/gcp_vpc"
 
   project_id  = var.project_id
   name        = var.gke_network_name
