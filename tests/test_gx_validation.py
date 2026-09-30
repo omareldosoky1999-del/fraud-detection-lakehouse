@@ -50,3 +50,13 @@ def test_invalid_negative_amount_fails_gx(spark):
     df = spark.createDataFrame([row(amount=-1.0)])
     with pytest.raises(ValueError, match="Great Expectations Silver contract failed"):
         assert_silver_dataframe(df)
+
+def test_silver_contract_is_declarative():
+    from processing.quality.gx_validation import build_expectations, load_silver_contract
+
+    contract = load_silver_contract()
+    expectations = build_expectations(contract)
+
+    assert "transaction_id" in contract["not_null_columns"]
+    assert "amount_usd" == contract["non_negative"][0]["column"]
+    assert len(expectations) == 6
