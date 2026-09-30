@@ -23,3 +23,16 @@ def test_lakehouse_overlay_is_pinned_and_wired():
     from processing.lakehouse.iceberg_tables import TABLES
     assert TABLES["features"] == "features.transaction_features"
     assert services["spark-worker"]["environment"]["ICEBERG_ENABLED"] == "true"
+
+
+def test_iceberg_partition_contract_avoids_micro_batch_partition_explosion():
+    from processing.lakehouse.iceberg_tables import PARTITIONS
+
+    assert PARTITIONS["bronze"] == ["ingest_date"]
+    assert PARTITIONS["quarantine"] == ["quarantine_date"]
+    assert PARTITIONS["silver"] == ["event_date"]
+    assert PARTITIONS["features"] == ["event_date"]
+    assert PARTITIONS["decisions"] == ["event_date"]
+
+    for columns in PARTITIONS.values():
+        assert "batch_token" not in columns
