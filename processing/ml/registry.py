@@ -24,7 +24,12 @@ def registry_members(path: str | Path | None = None) -> list[dict]:
 
 def production_alias(path: str | Path | None = None) -> str:
     configured = os.getenv("MLFLOW_MODEL_ALIAS")
-    return configured or load_registry_config(path).get("alias", "production")
+    return configured or load_registry_config(path).get("production_alias", "production")
+
+
+def candidate_alias(path: str | Path | None = None) -> str:
+    configured = os.getenv("MLFLOW_CANDIDATE_ALIAS")
+    return configured or load_registry_config(path).get("candidate_alias", "candidate")
 
 
 def decision_threshold(path: str | Path | None = None) -> float:
