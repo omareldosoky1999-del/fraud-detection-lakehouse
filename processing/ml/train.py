@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from datetime import datetime
@@ -34,6 +35,43 @@ NUMERIC = [
     "country_changed",
     "amount_to_prior_avg",
 ]
+
+
+def _dataset_signature(df: DataFrame) -> str:
+    """Build a deterministic compact signature without collecting the dataset."""
+    payload = (
+        df.select(
+            F.count("*").alias("rows"),
+            F.min("event_time").alias("min_event_time"),
+            F.max("event_time").alias("max_event_time"),
+            F.sum(F.col("amount_usd").cast("double")).alias("amount_sum"),
+            F.sum(F.when(F.col("label") == 1.0, 1).otherwise(0)).alias("positive_rows"),
+            F.sum(F.when(F.col("label") == 0.0, 1).otherwise(0)).alias("negative_rows"),
+            F.sum(
+                F.xxhash64(
+                    "transaction_id",
+                    "client_id",
+                    "event_time",
+                    F.col("amount_usd").cast("string"),
+                    F.col("label").cast("string"),
+                )
+            ).alias("row_hash_sum"),
+        )
+        .first()
+    )
+    stable = json.dumps(
+        {
+            "rows": payload["rows"],
+            "min_event_time": str(payload["min_event_time"]),
+            "max_event_time": str(payload["max_event_time"]),
+            "amount_sum": str(payload["amount_sum"]),
+            "positive_rows": payload["positive_rows"],
+            "negative_rows": payload["negative_rows"],
+            "row_hash_sum": payload["row_hash_sum"],
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(stable.encode("utf-8")).hexdigest()
 
 
 def _pipeline(estimator):
@@ -169,6 +207,9 @@ def train(
         validation_df = silver.filter(F.col("event_time") >= F.lit(cutoff)).cache()
         train_count = train_df.count()
         validation_count = validation_df.count()
+        dataset_signature = _dataset_signature(silver)
+        code_commit = os.getenv("GIT_COMMIT_SHA", os.getenv("GITHUB_SHA", "unknown"))
+        feature_contract = "processing/features/fraud_features.py:v1"
         if train_count == 0 or validation_count == 0:
             raise ValueError(
                 f"Invalid temporal split: train={train_count}, validation={validation_count}"
@@ -225,6 +266,9 @@ def train(
         metrics = {
             "spark_version": spark.version,
             "mlflow_version": mlflow.__version__,
+            "dataset_signature": dataset_signature,
+            "code_commit": code_commit,
+            "feature_contract": feature_contract,
             "cutoff": str(cutoff),
             "train_rows": train_count,
             "validation_rows": validation_count,
@@ -247,6 +291,14 @@ def train(
                     "positive_weight": positive_weight,
                     "train_positive_rows": positives,
                     "train_negative_rows": negatives,
+                    "dataset_signature": dataset_signature,
+                }
+            )
+            mlflow.set_tags(
+                {
+                    "code_commit": code_commit,
+                    "dataset_signature": dataset_signature,
+                    "feature_contract": feature_contract,
                 }
             )
 
@@ -318,6 +370,9 @@ def train(
                         "spark_version": spark.version,
                         "validation_strategy": "time_based_80_20",
                         "promotion_threshold": min_validation_auc,
+                        "dataset_signature": dataset_signature,
+                        "code_commit": code_commit,
+                        "feature_contract": feature_contract,
                     },
                 )
                 registered_versions[logical_name] = {
