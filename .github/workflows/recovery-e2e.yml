@@ -1,0 +1,119 @@
+name: Streaming Recovery E2E
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+
+jobs:
+  recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start core Spark/HDFS/Kafka stack
+        run: docker compose -f docker/docker-compose.yml up -d --build
+
+      - name: Initialize HDFS and Kafka
+        run: |
+          bash scripts/init_hdfs_dirs.sh
+          docker exec kafka bash /kafka-scripts/create-topics.sh kafka:9092
+
+      - name: Start rules-only streaming workload
+        run: |
+          docker exec -d spark-master bash -lc '
+            rm -rf /tmp/recovery-stream.log
+            nohup /opt/spark/bin/spark-submit \
+              --master spark://spark-master:7077 \
+              /app/processing/streaming/bronze_silver_job.py \
+              --topic transactions \
+              --alerts-topic "" \
+              --trigger "2 seconds" \
+              --starting-offsets earliest \
+              --rules-only \
+              --no-iceberg \
+              --no-hbase \
+              --checkpoint hdfs:///checkpoints/recovery-e2e \
+              > /tmp/recovery-stream.log 2>&1
+          '
+
+      - name: Produce first batch
+        run: |
+          python -m pip install --disable-pip-version-check \
+            'confluent-kafka[avro,schemaregistry]>=2.3' fastavro PyYAML
+          python ingestion/producer/transaction_producer.py \
+            --n 400 \
+            --speed 0 \
+            --start 2026-09-01T10:00:00 \
+            --start-id 300001 \
+            --reset \
+            --checkpoint /tmp/recovery-producer-1.json
+
+      - name: Wait for first batch to land
+        run: |
+          for i in $(seq 1 40); do
+            count=$(docker exec namenode /opt/hadoop/bin/hdfs dfs -count -q /warehouse/gold/fraud_decisions 2>/dev/null | awk '{print $2}' || true)
+            echo "decision_files=$count"
+            [ "${count:-0}" -gt 0 ] && exit 0
+            sleep 2
+          done
+          docker exec spark-master bash -lc 'tail -200 /tmp/recovery-stream.log || true'
+          exit 1
+
+      - name: Stop Spark streaming application
+        run: |
+          docker exec spark-master bash -lc "pkill -f 'processing/streaming/bronze_silver_job.py' || true"
+          sleep 3
+
+      - name: Produce second batch while Spark is down
+        run: |
+          python ingestion/producer/transaction_producer.py \
+            --n 300 \
+            --speed 0 \
+            --start 2026-09-01T10:20:00 \
+            --start-id 400001 \
+            --reset \
+            --checkpoint /tmp/recovery-producer-2.json
+
+      - name: Restart Spark with same checkpoint
+        run: |
+          docker exec -d spark-master bash -lc '
+            nohup /opt/spark/bin/spark-submit \
+              --master spark://spark-master:7077 \
+              /app/processing/streaming/bronze_silver_job.py \
+              --topic transactions \
+              --alerts-topic "" \
+              --trigger "2 seconds" \
+              --starting-offsets earliest \
+              --rules-only \
+              --no-iceberg \
+              --no-hbase \
+              --checkpoint hdfs:///checkpoints/recovery-e2e \
+              > /tmp/recovery-stream.log 2>&1
+          '
+
+      - name: Verify recovered transactions and no duplicate IDs
+        run: |
+          for i in $(seq 1 40); do
+            total=$(docker exec spark-master bash -lc "hdfs dfs -getmerge /warehouse/gold/fraud_decisions /tmp/recovery-decisions.parquet 2>/dev/null || true; test -s /tmp/recovery-decisions.parquet") || true
+            second=$(docker exec namenode /opt/hadoop/bin/hdfs dfs -find /warehouse/gold/fraud_decisions -name '*.parquet' | wc -l)
+            echo "decision_files=$second"
+            [ "${second:-0}" -gt 1 ] && break
+            sleep 3
+          done
+          docker exec spark-master bash -lc 'tail -200 /tmp/recovery-stream.log || true'
+          docker exec spark-master /opt/spark/bin/spark-submit --master spark://spark-master:7077 /app/scripts/recovery_check.py
+
+      - name: Capture logs on failure
+        if: failure()
+        run: |
+          docker exec spark-master bash -lc 'tail -400 /tmp/recovery-stream.log || true'
+          docker compose -f docker/docker-compose.yml logs --no-color --tail=500
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/docker-compose.yml down -v
