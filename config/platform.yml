@@ -9,7 +9,6 @@ lakehouse:
   iceberg: "1.11.0"
   catalog: "polaris"
   polaris: "1.7.0"
-  polaris: "1.7.0"
   local_object_store: "rustfs"
   rustfs: "1.0.0-rc.6"
   metadata_db: "postgres:16.15-alpine3.23"
