@@ -10,8 +10,8 @@ def test_prometheus_loads_rule_files():
         (ROOT / "monitoring" / "prometheus.yml").read_text(encoding="utf-8")
     )
     assert data["rule_files"]
-    assert "monitoring/alerts.yml" in data["rule_files"]
-    assert "monitoring/rules/recording.yml" in data["rule_files"]
+    assert "/etc/prometheus/alerts.yml" in data["rule_files"]
+    assert "/etc/prometheus/rules/recording.yml" in data["rule_files"]
 
 
 def test_alert_rules_have_explicit_severity_and_service():
