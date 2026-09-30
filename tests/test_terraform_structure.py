@@ -63,6 +63,11 @@ def test_cloud_environments_export_workload_identity_reference():
         assert f'output "{marker}"' in text
 
 
+def test_azure_storage_exposes_container_scope():
+    text = (ROOT / "modules" / "azure_object_storage" / "outputs.tf").read_text(encoding="utf-8")
+    assert 'output "container_id"' in text
+
+
 
 def test_cloud_storage_profiles_use_workload_identity():
     profiles = yaml.safe_load(
