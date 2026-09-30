@@ -14,15 +14,14 @@ module "object_storage" {
 module "network" {
   count = var.create_network ? 1 : 0
 
-  source = "../../modules/aws_vpc"
-
-  name                  = var.vpc_name
-  cidr_block            = var.vpc_cidr
-  availability_zones    = var.availability_zones
-  public_subnet_cidrs   = var.public_subnet_cidrs
-  private_subnet_cidrs  = var.private_subnet_cidrs
-  cluster_name          = var.eks_cluster_name
-  single_nat_gateway    = var.single_nat_gateway
+  source               = "../../modules/aws_vpc"
+  name                 = var.vpc_name
+  cidr_block           = var.vpc_cidr
+  availability_zones   = var.availability_zones
+  public_subnet_cidrs  = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+  cluster_name         = var.eks_cluster_name
+  single_nat_gateway   = var.single_nat_gateway
 }
 
 locals {
