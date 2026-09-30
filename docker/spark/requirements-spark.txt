@@ -7,3 +7,4 @@ pyyaml>=6.0
 prometheus-client>=0.20
 mlflow==3.16.0
 great_expectations[spark]==1.23.2
+pyspark==3.5.9
