@@ -57,3 +57,18 @@ variable "gke_machine_type" {
   type    = string
   default = "e2-standard-4"
 }
+
+variable "workload_namespace" {
+  type    = string
+  default = "fraud-platform"
+}
+
+variable "workload_service_account" {
+  type    = string
+  default = "fraud-spark"
+}
+
+variable "workload_service_account_name" {
+  type    = string
+  default = "fraud-spark"
+}
