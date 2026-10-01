@@ -50,6 +50,9 @@ the Docker stack only (see Known limitations).
 | `make verify` times out | `make stream-log`; confirm topic `transactions` exists and the producer ran |
 | `UNRESOLVED_COLUMN ... label` in training | Fixed in `build_labeled_features`; make sure you are on the current code |
 | Stream restarts but state errors after upgrading | The dedup operator changed; clear `STREAMING_CHECKPOINT` once |
+| `FileNotFoundError: ingestion/data/cards.avro` / `config/ml_models.yml` | Fixed: paths are anchored to the repo root; also `make` runs `docker exec -w /app` |
+| Executors die, `Connection reset`, executor ids keep growing | The worker used all host cores on a 2 GB executor. Use `SPARK_RES` (defaults bound cores/memory) or set `SPARK_WORKER_CORES` / `SPARK_WORKER_MEMORY` |
+| `Not enough fraud examples ... validation_positives` | Training set too small; fraud campaigns are clustered in time. Use `N_TRAIN=5000` or more |
 | Spark tests hang on a small machine | `export SPARK_LOCAL_IP=127.0.0.1` and lower `spark.sql.shuffle.partitions` |
 
 ## 5. Known limitations (read before calling this production)

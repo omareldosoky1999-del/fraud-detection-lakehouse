@@ -6,7 +6,9 @@ from pathlib import Path
 
 import yaml
 
-DEFAULT_CONFIG = Path("config/ml_models.yml")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+# Anchored to the repo root so it works from any working directory (docker exec, Airflow, ...).
+DEFAULT_CONFIG = REPO_ROOT / "config" / "ml_models.yml"
 
 
 def load_registry_config(path: str | Path | None = None) -> dict:

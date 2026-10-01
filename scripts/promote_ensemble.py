@@ -6,12 +6,12 @@ import os
 
 from mlflow import MlflowClient
 
-from processing.ml.registry import candidate_alias, load_registry_config, production_alias, registry_members
+from processing.ml.registry import DEFAULT_CONFIG, candidate_alias, load_registry_config, production_alias, registry_members
 
 
 def promote(
     tracking_uri: str,
-    registry_config: str = "config/ml_models.yml",
+    registry_config: str = str(DEFAULT_CONFIG),
     candidate: str | None = None,
     production: str | None = None,
     expected_run_id: str | None = None,
@@ -72,7 +72,7 @@ def promote(
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--tracking-uri', default=os.getenv('MLFLOW_TRACKING_URI'))
-    parser.add_argument('--registry-config', default=os.getenv('MLFLOW_MODEL_CONFIG', 'config/ml_models.yml'))
+    parser.add_argument('--registry-config', default=os.getenv('MLFLOW_MODEL_CONFIG', str(DEFAULT_CONFIG)))
     parser.add_argument('--candidate')
     parser.add_argument('--production')
     parser.add_argument('--expected-run-id')

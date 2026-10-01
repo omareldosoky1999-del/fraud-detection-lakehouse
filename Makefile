@@ -6,7 +6,11 @@
 
 COMPOSE   := docker compose -f docker/docker-compose.yml -f docker/docker-compose.lakehouse.yml -f docker/docker-compose.mlflow.yml
 PROFILES  := --profile lakehouse --profile mlops --profile serving
-SUBMIT    := /opt/spark/bin/spark-submit --master spark://spark-master:7077
+# The worker advertises ALL host cores; a 2 GB executor running 16 tasks dies with OOM
+# ("Connection reset" / executor ids climbing). Bound cores and memory explicitly.
+SPARK_RES ?= --executor-memory 2g --driver-memory 2g --executor-cores 4 --total-executor-cores 4 --conf spark.sql.shuffle.partitions=8 --conf spark.default.parallelism=8
+SUBMIT    := /opt/spark/bin/spark-submit --master spark://spark-master:7077 $(SPARK_RES)
+EXEC      := docker exec -w /app
 N_TRAIN   ?= 5000
 N_EVENTS  ?= 1500
 START     ?= 2026-09-01T10:00:00
@@ -34,7 +38,7 @@ init:
 	@for i in $$(seq 1 40); do curl -fsS http://localhost:8095/health >/dev/null && break; sleep 3; done
 
 train:
-	docker exec -e GIT_COMMIT_SHA="$$(git rev-parse HEAD)" spark-master bash -lc 'set -o pipefail; \
+	$(EXEC) -e GIT_PYTHON_REFRESH=quiet -e GIT_COMMIT_SHA="$$(git rev-parse HEAD)" spark-master bash -lc 'set -o pipefail; \
 	  $(SUBMIT) /app/processing/ml/train.py --n $(N_TRAIN) --tracking-uri http://mlflow:5000 \
 	  --promote-alias candidate --ml-threshold 0.70 2>&1 | tee /tmp/fraud-training.log'
 
@@ -42,11 +46,11 @@ promote:
 	@RUN_ID=$$(docker exec spark-master bash -lc "grep '\[MLFLOW\] run_id=' /tmp/fraud-training.log | tail -1 | sed 's/.*run_id=//'"); \
 	test -n "$$RUN_ID" || { echo "no run_id found - run 'make train' first"; exit 1; }; \
 	echo "promoting run $$RUN_ID"; \
-	docker exec spark-master $(SUBMIT) /app/scripts/promote_ensemble.py \
+	$(EXEC) -e GIT_PYTHON_REFRESH=quiet spark-master $(SUBMIT) /app/scripts/promote_ensemble.py \
 	  --tracking-uri http://mlflow:5000 --expected-run-id "$$RUN_ID"
 
 stream:
-	docker exec -d spark-master bash -lc 'rm -f /tmp/full-stack-stream.log; nohup $(SUBMIT) \
+	$(EXEC) -d spark-master bash -lc 'rm -f /tmp/full-stack-stream.log; nohup $(SUBMIT) \
 	  /app/processing/streaming/bronze_silver_job.py --topic transactions --alerts-topic fraud.alerts \
 	  --trigger "2 seconds" --max-offsets-per-trigger 500 > /tmp/full-stack-stream.log 2>&1'
 	@sleep 10; docker exec spark-master bash -lc 'tail -40 /tmp/full-stack-stream.log || true'

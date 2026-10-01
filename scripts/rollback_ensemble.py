@@ -6,13 +6,13 @@ import os
 
 from mlflow import MlflowClient
 
-from processing.ml.registry import production_alias, registry_members
+from processing.ml.registry import DEFAULT_CONFIG, production_alias, registry_members
 
 
 def rollback(
     tracking_uri: str,
     target_run_id: str,
-    registry_config: str = "config/ml_models.yml",
+    registry_config: str = str(DEFAULT_CONFIG),
     production: str | None = None,
 ):
     os.environ["MLFLOW_TRACKING_URI"] = tracking_uri
@@ -74,7 +74,7 @@ def main(argv=None):
     parser.add_argument("--target-run-id", required=True)
     parser.add_argument(
         "--registry-config",
-        default=os.getenv("MLFLOW_MODEL_CONFIG", "config/ml_models.yml"),
+        default=os.getenv("MLFLOW_MODEL_CONFIG", str(DEFAULT_CONFIG)),
     )
     parser.add_argument("--production")
     args = parser.parse_args(argv)
