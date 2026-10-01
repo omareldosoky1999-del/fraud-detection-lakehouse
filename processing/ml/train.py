@@ -15,6 +15,7 @@ from pyspark.ml import Pipeline
 from pyspark.ml.classification import GBTClassifier, LogisticRegression, RandomForestClassifier
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.ml.feature import OneHotEncoder, StringIndexer, VectorAssembler
+from pyspark.ml.functions import vector_to_array
 from pyspark.sql import functions as F
 
 from ingestion.generator.transaction_generator import generate
@@ -310,7 +311,7 @@ def train(
 
                 scored = predictions.withColumn(
                     "_ml_score",
-                    F.col("probability")[1],
+                    vector_to_array(F.col("probability"))[1],
                 ).withColumn(
                     "_ml_decision",
                     F.when(

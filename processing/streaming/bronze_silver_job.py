@@ -135,6 +135,15 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
     start_metrics_server()
 
     def process_batch(batch_df: DataFrame, batch_id: int) -> None:
+        # foreachBatch re-evaluates the Kafka read + Avro decode for every
+        # action (isEmpty/count/collect/writes). Persist once per micro-batch.
+        batch_df = batch_df.persist()
+        try:
+            _process_batch(batch_df, batch_id)
+        finally:
+            batch_df.unpersist()
+
+    def _process_batch(batch_df: DataFrame, batch_id: int) -> None:
         if batch_df.rdd.isEmpty():
             return
 
@@ -269,15 +278,16 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
             .cache()
         )
 
-        decided_all = apply_rules(featured_all)
-        if ml_models:
-            decided_all = apply_ml_ensemble(decided_all, ml_models, threshold=ml_threshold)
+        # Rules need the client history (window functions), but ML scoring is
+        # row-wise: restrict to this batch's transactions BEFORE scoring so the
+        # ensemble does not re-score up to 30 days of history every micro-batch.
         decided_batch = (
-            decided_all
+            apply_rules(featured_all)
             .join(batch_transactions, on="transaction_id", how="inner")
-            .withColumn("batch_token", F.lit(batch_token))
-            .cache()
         )
+        if ml_models:
+            decided_batch = apply_ml_ensemble(decided_batch, ml_models, threshold=ml_threshold)
+        decided_batch = decided_batch.withColumn("batch_token", F.lit(batch_token)).cache()
 
         if legacy_hdfs_enabled:
             (
@@ -361,7 +371,11 @@ def run(args):
           .load())
 
     events = decode_transactions(raw, schema_json)
-    events = events.withWatermark("kafka_timestamp", DEDUP_WATERMARK).dropDuplicates(["Trans_id"])
+    # dropDuplicates(["Trans_id"]) alone never evicts state because the watermark
+    # column is not part of the key; dropDuplicatesWithinWatermark bounds it.
+    events = (events
+              .withWatermark("kafka_timestamp", DEDUP_WATERMARK)
+              .dropDuplicatesWithinWatermark(["Trans_id"]))
 
     process_batch = build_batch_processor(
         spark,

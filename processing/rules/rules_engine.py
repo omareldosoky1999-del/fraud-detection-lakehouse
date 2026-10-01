@@ -83,7 +83,7 @@ def apply_rules(history_df: DataFrame) -> DataFrame:
     df = df.withColumn("r_structuring", is_structuring_amount & (F.col("_structuring_count") >= STRUCTURING_COUNT))
 
     # ---- IMPOSSIBLE_TRAVEL: country changed from the previous txn, fast ---
-    prev_w = Window.partitionBy("client_id").orderBy(F.col("_t"))
+    prev_w = Window.partitionBy("client_id").orderBy(F.col("_t"), F.col("transaction_id"))
     df = (df
           .withColumn("_prev_country", F.lag("country_src").over(prev_w))
           .withColumn("_prev_t", F.lag("_t").over(prev_w)))
