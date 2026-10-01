@@ -38,10 +38,10 @@ with DAG(
         bash_command=(
             "docker exec spark-master python3 "
             f"{APP_DIR}/scripts/validate_silver_quality.py "
-            "--date {{{{ ds }}}} "
+            "--date {{ ds }} "
             "--iceberg-catalog polaris "
             "--iceberg-table silver.transactions "
-            f"--report /tmp/silver_validation_{{{{ ds }}}}.json"
+            "--report /tmp/silver_validation_{{ ds }}.json"
         ),
     )
 
@@ -51,7 +51,7 @@ with DAG(
             "docker exec spark-master /opt/spark/bin/spark-submit "
             "--master spark://spark-master:7077 "
             f"{APP_DIR}/processing/batch/build_gold.py "
-            "--date {{{{ ds }}}} "
+            "--date {{ ds }} "
             "--lookback-days 2"
         ),
     )

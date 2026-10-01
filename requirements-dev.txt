@@ -10,3 +10,5 @@ pyarrow>=14
 pyspark==3.5.9
 mlflow==3.16.0
 great_expectations[spark]==1.23.2
+# DAG command rendering tests (Airflow itself is not required in CI)
+jinja2>=3.1
