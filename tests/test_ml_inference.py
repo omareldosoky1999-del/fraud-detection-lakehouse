@@ -92,3 +92,18 @@ def test_probability_extraction_works_on_vector_column(spark):
         scored.select(F.col("probability")[1]).collect()
     values = scored.select(vector_to_array(F.col("probability"))[1].alias("p")).collect()
     assert all(0.0 <= r["p"] <= 1.0 for r in values)
+
+
+def test_training_frame_keeps_labels_for_every_event(spark):
+    """Regression: train.py used to lose `label` inside to_silver (UNRESOLVED_COLUMN)."""
+    from datetime import datetime
+
+    from ingestion.generator.transaction_generator import generate
+    from processing.ml.train import build_labeled_features
+
+    events = generate(400, seed=7, start=datetime(2026, 9, 1), data_dir="ingestion/data")
+    frame = build_labeled_features(spark, events)
+    assert "label" in frame.columns
+    assert frame.count() == len(events)
+    positives = frame.filter(F.col("label") == 1.0).count()
+    assert positives == sum(int(e.is_fraud) for e in events)

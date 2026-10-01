@@ -1,0 +1,68 @@
+{
+  "spark_version": "3.5.9",
+  "mlflow_version": "3.16.0",
+  "dataset_signature": "7321dc39c1c85927ce8b78db78cbc0a983fb7920c41fd11b630ca5376288b9d0",
+  "code_commit": "unknown",
+  "feature_contract": "processing/features/fraud_features.py:v1",
+  "cutoff": "2026-09-01 10:54:45",
+  "train_rows": 2408,
+  "validation_rows": 603,
+  "validation_strategy": "time_based_80_20",
+  "logistic_regression": {
+    "validation_auc": 0.9916805324459235,
+    "validation_auprc": 0.1611111111111111,
+    "validation_precision": 0.125,
+    "validation_recall": 1.0,
+    "validation_f1": 0.2222222222222222,
+    "decision_threshold": 0.7,
+    "min_validation_auc": 0.65,
+    "registered_name": "fraud_logistic_regression",
+    "registry_version": "1",
+    "promotion_alias": "candidate"
+  },
+  "random_forest": {
+    "validation_auc": 0.9925124792013311,
+    "validation_auprc": 0.5704545454545454,
+    "validation_precision": 1.0,
+    "validation_recall": 0.5,
+    "validation_f1": 0.6666666666666666,
+    "decision_threshold": 0.7,
+    "min_validation_auc": 0.65,
+    "registered_name": "fraud_random_forest",
+    "registry_version": "1",
+    "promotion_alias": "candidate"
+  },
+  "gbt": {
+    "validation_auc": 0.9633943427620631,
+    "validation_auprc": 0.5164251207729469,
+    "validation_precision": 0.14285714285714285,
+    "validation_recall": 0.5,
+    "validation_f1": 0.22222222222222224,
+    "decision_threshold": 0.7,
+    "min_validation_auc": 0.65,
+    "registered_name": "fraud_gbt",
+    "registry_version": "1",
+    "promotion_alias": "candidate"
+  },
+  "ensemble_release": {
+    "run_id": "168b3863922442f8bace9c6ae157dd61",
+    "promotion_alias": "candidate",
+    "production_alias": "production",
+    "members": {
+      "logistic_regression": {
+        "registered_name": "fraud_logistic_regression",
+        "version": 1
+      },
+      "random_forest": {
+        "registered_name": "fraud_random_forest",
+        "version": 1
+      },
+      "gbt": {
+        "registered_name": "fraud_gbt",
+        "version": 1
+      }
+    },
+    "promotion_policy": "coordinated_alias_promotion_after_full_registration_and_validation_gate",
+    "min_validation_auc": 0.65
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "run_id": "168b3863922442f8bace9c6ae157dd61",
+  "promotion_alias": "candidate",
+  "production_alias": "production",
+  "members": {
+    "logistic_regression": {
+      "registered_name": "fraud_logistic_regression",
+      "version": 1
+    },
+    "random_forest": {
+      "registered_name": "fraud_random_forest",
+      "version": 1
+    },
+    "gbt": {
+      "registered_name": "fraud_gbt",
+      "version": 1
+    }
+  },
+  "promotion_policy": "coordinated_alias_promotion_after_full_registration_and_validation_gate",
+  "min_validation_auc": 0.65
+}

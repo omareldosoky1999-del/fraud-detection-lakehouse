@@ -130,6 +130,20 @@ def _register_spark_model(
     return version.version
 
 
+def build_labeled_features(spark, events):
+    """Silver + fraud features + ``label`` for generator events.
+
+    ``to_silver`` selects an explicit column list, so a label column added to the
+    raw frame never survives it; labels are joined back on ``transaction_id``.
+    """
+    raw = spark.createDataFrame([e.rec for e in events])
+    labels = spark.createDataFrame(
+        [(int(e.rec["Trans_id"]), float(e.is_fraud)) for e in events],
+        "transaction_id long, label double",
+    )
+    return add_fraud_features(to_silver(raw).join(labels, on="transaction_id", how="inner"))
+
+
 def train(
     n: int,
     model_dir: str,
@@ -188,12 +202,7 @@ def train(
             start=datetime(2026, 9, 1),
             data_dir="ingestion/data",
         )
-        raw = spark.createDataFrame(
-            [{**e.rec, "label": float(e.is_fraud)} for e in events]
-        )
-        silver = add_fraud_features(
-            to_silver(raw).withColumn("label", F.col("label").cast("double"))
-        )
+        silver = build_labeled_features(spark, events)
 
         cutoff = (
             silver.select(
