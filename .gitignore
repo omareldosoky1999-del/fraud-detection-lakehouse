@@ -40,3 +40,7 @@ serving-data/
 .terraform.tfstate.lock.info
 *.tfvars
 *.tfvars.json
+
+# local MLflow / E2E artifacts
+mlruns/
+mlflow.db
