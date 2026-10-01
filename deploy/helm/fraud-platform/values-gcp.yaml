@@ -3,6 +3,8 @@ environment:
   namespace: fraud-platform
 
 env:
+  # Requires the GCS Hadoop connector jar in the image before first deploy.
+  STREAMING_CHECKPOINT: gs://fraud-platform-checkpoints-example/checkpoints/bronze_silver
   ICEBERG_FILEIO_IMPL: org.apache.iceberg.gcp.gcs.GCSFileIO
   POLARIS_URI: https://polaris.example.internal/api/catalog
   POLARIS_TOKEN_URI: https://polaris.example.internal/api/catalog/v1/oauth/tokens

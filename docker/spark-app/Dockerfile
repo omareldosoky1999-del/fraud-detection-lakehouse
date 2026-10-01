@@ -32,6 +32,25 @@ urlretrieve(
 )
 PY
 
+# Structured Streaming needs the Kafka source and Avro (from_avro) connectors,
+# which are NOT bundled in the apache/spark base image. Versions follow Spark 3.5.x.
+# hadoop-aws + SDK bundle are required for s3a:// checkpoint locations on AWS.
+RUN python3 - <<'PY'
+from urllib.request import urlretrieve
+base = "/opt/spark/jars"
+M = "https://repo1.maven.org/maven2"
+for path in [
+    "org/apache/spark/spark-sql-kafka-0-10_2.12/3.5.9/spark-sql-kafka-0-10_2.12-3.5.9.jar",
+    "org/apache/spark/spark-token-provider-kafka-0-10_2.12/3.5.9/spark-token-provider-kafka-0-10_2.12-3.5.9.jar",
+    "org/apache/spark/spark-avro_2.12/3.5.9/spark-avro_2.12-3.5.9.jar",
+    "org/apache/kafka/kafka-clients/3.4.1/kafka-clients-3.4.1.jar",
+    "org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar",
+    "org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar",
+    "com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar",
+]:
+    urlretrieve(f"{M}/{path}", f"{base}/{path.rsplit('/', 1)[1]}")
+PY
+
 COPY --chown=spark:spark common /app/common
 COPY --chown=spark:spark config /app/config
 COPY --chown=spark:spark ingestion /app/ingestion
