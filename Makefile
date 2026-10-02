@@ -42,8 +42,9 @@ init:
 hdfs-ready:
 	@docker exec namenode /opt/hadoop/bin/hdfs dfsadmin -report 2>/dev/null | grep -q "Live datanodes (1)" \
 	  || { echo "HDFS has no live datanode (see RUNBOOK: Incompatible clusterIDs: docker rm -f datanode && make up)"; exit 1; }
-	@docker exec namenode /opt/hadoop/bin/hdfs dfs -test -d /user/spark \
-	  || { echo "HDFS /user/spark missing -> running scripts/init_hdfs_dirs.sh"; bash scripts/init_hdfs_dirs.sh; }
+	@{ docker exec namenode /opt/hadoop/bin/hdfs dfs -test -d /user/spark \
+	   && docker exec namenode /opt/hadoop/bin/hdfs dfs -test -d /checkpoints; } \
+	  || { echo "HDFS dirs (/user/spark, /checkpoints) missing -> running scripts/init_hdfs_dirs.sh"; bash scripts/init_hdfs_dirs.sh; }
 
 train: hdfs-ready
 	$(EXEC) -e GIT_PYTHON_REFRESH=quiet -e GIT_COMMIT_SHA="$$(git rev-parse HEAD)" spark-master bash -lc 'set -o pipefail; \
@@ -57,11 +58,14 @@ promote:
 	$(EXEC) -e GIT_PYTHON_REFRESH=quiet spark-master $(SUBMIT) /app/scripts/promote_ensemble.py \
 	  --tracking-uri http://mlflow:5000 --expected-run-id "$$RUN_ID"
 
-stream:
+stream: hdfs-ready
 	$(EXEC) -d spark-master bash -lc 'rm -f /tmp/full-stack-stream.log; nohup $(SUBMIT) \
 	  /app/processing/streaming/bronze_silver_job.py --topic transactions --alerts-topic fraud.alerts \
 	  --trigger "2 seconds" --max-offsets-per-trigger 500 > /tmp/full-stack-stream.log 2>&1'
-	@sleep 10; docker exec spark-master bash -lc 'tail -40 /tmp/full-stack-stream.log || true'
+	@sleep 20; docker exec spark-master bash -lc 'ps aux | grep -q "[b]ronze_silver_job"' \
+	  || { echo "stream job is NOT running. First errors:"; \
+	       docker exec spark-master bash -lc "grep -nE 'Caused by|ERROR|Exception' /tmp/full-stack-stream.log | head -10"; exit 1; }
+	@docker exec spark-master bash -lc 'tail -15 /tmp/full-stack-stream.log || true'
 
 stream-log:
 	docker exec spark-master bash -lc 'tail -f /tmp/full-stack-stream.log'

@@ -55,6 +55,7 @@ the Docker stack only (see Known limitations).
 | `Not enough fraud examples ... validation_positives` | Training set too small; fraud campaigns are clustered in time. Use `N_TRAIN=5000` or more |
 | `AccessControlException: user=spark, access=WRITE, inode="/"` during `train` | HDFS `/user/spark` is missing (`make init` did not run/failed). `make train` now creates it; if the script itself fails run `sed -i 's/\r$//' scripts/*.sh` (CRLF from Windows) |
 | datanode restarting forever, log says `Incompatible clusterIDs` | The namenode was re-formatted (new clusterID) while the datanode kept the old one. Reset the datanode: `docker rm -f datanode && make up`. The compose now formats the namenode only once (it used to check a path that was never populated) |
+| `make stream` dies with `AccessControlException ... inode="/"` | `/checkpoints` missing on HDFS: `bash scripts/init_hdfs_dirs.sh` (now creates it; `make stream` runs it automatically) |
 | Spark tests hang on a small machine | `export SPARK_LOCAL_IP=127.0.0.1` and lower `spark.sql.shuffle.partitions` |
 
 ## 5. Known limitations (read before calling this production)
