@@ -15,7 +15,7 @@ N_TRAIN   ?= 5000
 N_EVENTS  ?= 1500
 START     ?= 2026-09-01T10:00:00
 
-.PHONY: help up down ps init train promote stream stream-log produce verify e2e test local-e2e
+.PHONY: help up down ps init hdfs-ready train promote stream stream-log produce verify e2e test local-e2e
 
 help:
 	@grep -E '^# ' Makefile | head -6; echo; echo "Targets: up init train promote stream produce verify e2e down test local-e2e"
@@ -37,7 +37,13 @@ init:
 	@echo "waiting for serving API..."
 	@for i in $$(seq 1 40); do curl -fsS http://localhost:8095/health >/dev/null && break; sleep 3; done
 
-train:
+# Training saves model copies through Spark's default filesystem (HDFS in this stack),
+# which needs /user/spark to exist and be owned by 'spark'. Create it if missing.
+hdfs-ready:
+	@docker exec namenode /opt/hadoop/bin/hdfs dfs -test -d /user/spark \
+	  || { echo "HDFS /user/spark missing -> running scripts/init_hdfs_dirs.sh"; bash scripts/init_hdfs_dirs.sh; }
+
+train: hdfs-ready
 	$(EXEC) -e GIT_PYTHON_REFRESH=quiet -e GIT_COMMIT_SHA="$$(git rev-parse HEAD)" spark-master bash -lc 'set -o pipefail; \
 	  $(SUBMIT) /app/processing/ml/train.py --n $(N_TRAIN) --tracking-uri http://mlflow:5000 \
 	  --promote-alias candidate --ml-threshold 0.70 2>&1 | tee /tmp/fraud-training.log'
