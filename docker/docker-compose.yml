@@ -81,7 +81,7 @@ services:
       - CORE-SITE.XML_fs.defaultFS=hdfs://namenode:8020
       - HADOOP_HOME=/opt/hadoop
     command: >
-      bash -c "if [ ! -d /hadoop/dfs/name/current ]; then
+      bash -c "if [ ! -d /tmp/hadoop-hadoop/dfs/name/current ]; then
         /opt/hadoop/bin/hdfs namenode -format -force;
       fi; /opt/hadoop/bin/hdfs namenode"
     volumes: ["hadoop_namenode:/hadoop/dfs/name"]

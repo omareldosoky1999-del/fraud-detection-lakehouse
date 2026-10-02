@@ -40,6 +40,8 @@ init:
 # Training saves model copies through Spark's default filesystem (HDFS in this stack),
 # which needs /user/spark to exist and be owned by 'spark'. Create it if missing.
 hdfs-ready:
+	@docker exec namenode /opt/hadoop/bin/hdfs dfsadmin -report 2>/dev/null | grep -q "Live datanodes (1)" \
+	  || { echo "HDFS has no live datanode (see RUNBOOK: Incompatible clusterIDs: docker rm -f datanode && make up)"; exit 1; }
 	@docker exec namenode /opt/hadoop/bin/hdfs dfs -test -d /user/spark \
 	  || { echo "HDFS /user/spark missing -> running scripts/init_hdfs_dirs.sh"; bash scripts/init_hdfs_dirs.sh; }
 
