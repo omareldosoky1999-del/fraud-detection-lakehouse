@@ -3,6 +3,8 @@ environment:
   namespace: fraud-platform
 
 env:
+  # Requires hadoop-azure jars + abfss auth in the image before first deploy.
+  STREAMING_CHECKPOINT: abfss://checkpoints@examplestorage.dfs.core.windows.net/bronze_silver
   ICEBERG_FILEIO_IMPL: org.apache.iceberg.azure.adlsv2.ADLSFileIO
   POLARIS_URI: https://polaris.example.internal/api/catalog
   POLARIS_TOKEN_URI: https://polaris.example.internal/api/catalog/v1/oauth/tokens

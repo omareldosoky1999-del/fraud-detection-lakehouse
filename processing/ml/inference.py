@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from pyspark.ml import PipelineModel
+from pyspark.ml.functions import vector_to_array
 from pyspark.sql import DataFrame, functions as F
 
 from processing.ml.registry import production_alias, registry_members
@@ -97,11 +98,12 @@ def apply_ml_ensemble(
 
     for i, model in enumerate(models):
         col = f"_ml_prob_{i}"
-        prediction = (
-            model.transform(out)
-            .select("transaction_id", F.col("probability")[1].alias(col))
-        )
-        out = out.join(prediction, "transaction_id", "left")
+        scored = model.transform(out)
+        # Keep only this member's probability; drop the pipeline's intermediate
+        # columns (indexers, encoders, features, rawPrediction, ...) so the next
+        # member starts from the original schema. No join/shuffle required.
+        added = [c for c in scored.columns if c not in out.columns]
+        out = scored.withColumn(col, vector_to_array(F.col("probability"))[1]).drop(*added)
         cols.append(col)
 
     probability = F.array_max(

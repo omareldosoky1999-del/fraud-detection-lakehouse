@@ -15,12 +15,23 @@ from pyspark.ml import Pipeline
 from pyspark.ml.classification import GBTClassifier, LogisticRegression, RandomForestClassifier
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.ml.feature import OneHotEncoder, StringIndexer, VectorAssembler
+from pyspark.ml.functions import vector_to_array
 from pyspark.sql import functions as F
 
 from ingestion.generator.transaction_generator import generate
 from processing.common.spark_session import get_spark
 from processing.features.fraud_features import add_fraud_features
-from processing.ml.registry import candidate_alias, load_registry_config, registry_members
+from processing.ml.registry import (
+    DEFAULT_CONFIG,
+    REPO_ROOT,
+    candidate_alias,
+    load_registry_config,
+    registry_members,
+)
+
+DATA_DIR = str(REPO_ROOT / "ingestion" / "data")
+# AUC/precision/recall on a handful of positives is noise; require a minimum.
+MIN_VALIDATION_POSITIVES = 10
 from processing.streaming.transform import to_silver
 
 CATEGORICAL = ["txn_type", "status", "currency", "country_src", "country_dest"]
@@ -129,13 +140,27 @@ def _register_spark_model(
     return version.version
 
 
+def build_labeled_features(spark, events):
+    """Silver + fraud features + ``label`` for generator events.
+
+    ``to_silver`` selects an explicit column list, so a label column added to the
+    raw frame never survives it; labels are joined back on ``transaction_id``.
+    """
+    raw = spark.createDataFrame([e.rec for e in events])
+    labels = spark.createDataFrame(
+        [(int(e.rec["Trans_id"]), float(e.is_fraud)) for e in events],
+        "transaction_id long, label double",
+    )
+    return add_fraud_features(to_silver(raw).join(labels, on="transaction_id", how="inner"))
+
+
 def train(
     n: int,
     model_dir: str,
     seed: int = 42,
     tracking_uri: str | None = None,
     experiment: str = "fraud-detection/spark-ml-ensemble",
-    registry_config: str = "config/ml_models.yml",
+    registry_config: str = str(DEFAULT_CONFIG),
     promote_alias: str | None = None,
     ml_threshold: float | None = None,
 ):
@@ -185,14 +210,9 @@ def train(
             n,
             seed=seed,
             start=datetime(2026, 9, 1),
-            data_dir="ingestion/data",
+            data_dir=DATA_DIR,
         )
-        raw = spark.createDataFrame(
-            [{**e.rec, "label": float(e.is_fraud)} for e in events]
-        )
-        silver = add_fraud_features(
-            to_silver(raw).withColumn("label", F.col("label").cast("double"))
-        )
+        silver = build_labeled_features(spark, events)
 
         cutoff = (
             silver.select(
@@ -213,6 +233,17 @@ def train(
         if train_count == 0 or validation_count == 0:
             raise ValueError(
                 f"Invalid temporal split: train={train_count}, validation={validation_count}"
+            )
+        min_val_pos = int(os.getenv("ML_MIN_VALIDATION_POSITIVES", MIN_VALIDATION_POSITIVES))
+        validation_positives = validation_df.filter(F.col("label") == 1.0).count()
+        train_positives = train_df.filter(F.col("label") == 1.0).count()
+        if train_positives == 0 or validation_positives < min_val_pos:
+            raise ValueError(
+                f"Not enough fraud examples for a meaningful evaluation: "
+                f"train_positives={train_positives}, validation_positives={validation_positives} "
+                f"(need >= {min_val_pos}). Fraud campaigns are clustered in time, so small --n "
+                f"leaves the validation window empty (AUC would be reported as 0). Use a larger --n "
+                f"(5000 or more)."
             )
 
         out = Path(model_dir)
@@ -310,7 +341,7 @@ def train(
 
                 scored = predictions.withColumn(
                     "_ml_score",
-                    F.col("probability")[1],
+                    vector_to_array(F.col("probability"))[1],
                 ).withColumn(
                     "_ml_decision",
                     F.when(
@@ -471,7 +502,7 @@ def main(argv=None):
     )
     parser.add_argument(
         "--registry-config",
-        default=os.getenv("MLFLOW_MODEL_CONFIG", "config/ml_models.yml"),
+        default=os.getenv("MLFLOW_MODEL_CONFIG", str(DEFAULT_CONFIG)),
     )
     parser.add_argument(
         "--promote-alias",

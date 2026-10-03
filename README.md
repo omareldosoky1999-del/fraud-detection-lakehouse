@@ -2,6 +2,8 @@
 
 Kafka + Schema Registry + Spark 3.5.9 Structured Streaming + HDFS/Hive + HBase + Airflow + Prometheus/Grafana, with Spark MLlib ensemble scoring.
 
+> **Run it:** see [RUNBOOK.md](RUNBOOK.md) - `make local-e2e` (no Docker) or `make e2e` (full stack).
+
 ## Pipeline
 
 ```text

@@ -46,13 +46,39 @@ def _ensure_table(
     except Exception:
         pass
 
+    # In foreachBatch the batch DataFrame belongs to a *cloned* session, so the temp
+    # view must be registered and queried on that same session (not the outer one).
+    session = frame.sparkSession
     frame.createOrReplaceTempView(temp_view)
     partition_sql = ", ".join(partition_columns)
-    spark.sql(
+    session.sql(
         f"CREATE TABLE IF NOT EXISTS {table} "
         f"USING iceberg PARTITIONED BY ({partition_sql}) "
         f"AS SELECT * FROM {temp_view} WHERE 1=0"
     )
+
+
+_PARTIAL_FILE_DELETE = "some, but not all, rows match filter"
+
+
+def _delete_batch_rows(spark: SparkSession, table: str, escaped_token: str, partition_predicate: str) -> None:
+    """Remove the rows of one batch (idempotent retry) from ``table``.
+
+    A plain DELETE can be planned by Iceberg as a metadata-only delete, which it
+    refuses when it cannot prove that *every* row of a data file matches the filter
+    (ValidationException: "Cannot delete file where some, but not all, rows match
+    filter"). A MERGE is always planned at row level, so use it as the fallback.
+    """
+    condition = f"batch_token = '{escaped_token}' AND ({partition_predicate})"
+    try:
+        spark.sql(f"DELETE FROM {table} WHERE {condition}")
+    except Exception as exc:
+        if _PARTIAL_FILE_DELETE not in str(exc):
+            raise
+        spark.sql(
+            f"MERGE INTO {table} AS t USING (SELECT 1 AS _k) AS s "
+            f"ON {condition} WHEN MATCHED THEN DELETE"
+        )
 
 
 def _replace_batch(
@@ -90,10 +116,7 @@ def _replace_batch(
                     parts.append(f"{column} = DATE '{literal}'" if "date" in column else f"{column} = '{literal}'")
             predicates.append("(" + " AND ".join(parts) + ")")
         partition_predicate = " OR ".join(predicates)
-        spark.sql(
-            f"DELETE FROM {table} "
-            f"WHERE batch_token = '{escaped}' AND ({partition_predicate})"
-        )
+        _delete_batch_rows(spark, table, escaped, partition_predicate)
 
     frame.writeTo(table).append()
 

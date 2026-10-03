@@ -1,0 +1,7 @@
+# Shell scripts, Makefile and Dockerfiles run inside Linux containers / WSL:
+# a Windows checkout with CRLF breaks them ("\r: command not found").
+*.sh        text eol=lf
+Makefile    text eol=lf
+Dockerfile* text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf

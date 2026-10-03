@@ -81,7 +81,7 @@ services:
       - CORE-SITE.XML_fs.defaultFS=hdfs://namenode:8020
       - HADOOP_HOME=/opt/hadoop
     command: >
-      bash -c "if [ ! -d /hadoop/dfs/name/current ]; then
+      bash -c "if [ ! -d /tmp/hadoop-hadoop/dfs/name/current ]; then
         /opt/hadoop/bin/hdfs namenode -format -force;
       fi; /opt/hadoop/bin/hdfs namenode"
     volumes: ["hadoop_namenode:/hadoop/dfs/name"]
@@ -149,6 +149,8 @@ services:
     ports: ["8082:8081"]
     volumes: ["..:/app"]
     environment:
+      SPARK_WORKER_CORES: "${SPARK_WORKER_CORES:-4}"
+      SPARK_WORKER_MEMORY: "${SPARK_WORKER_MEMORY:-6g}"
       SPARK_MASTER_URL: spark://spark-master:7077
       CORE_CONF_fs_defaultFS: hdfs://namenode:8020
       SPARK_LOCAL_IP: spark-worker

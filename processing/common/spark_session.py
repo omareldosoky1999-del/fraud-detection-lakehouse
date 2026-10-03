@@ -58,6 +58,9 @@ def get_spark(app_name: str, *, enable_hive: bool = True, extra_conf=None) -> Sp
                    )
                    .config(f"spark.sql.catalog.{catalog}.scope", "PRINCIPAL_ROLE:ALL")
                    .config(f"spark.sql.catalog.{catalog}.token-refresh-enabled", "true")
+                   # Polaris denies REPORT_READ/WRITE_METRICS to this principal; the failures are
+                   # non-fatal but flood the log with stack traces.
+                   .config(f"spark.sql.catalog.{catalog}.rest-metrics-reporting-enabled", "false")
                    .config("spark.redaction.regex", "(?i)credential|secret|password|token")
                    .config(
                        f"spark.sql.catalog.{catalog}.io-impl",

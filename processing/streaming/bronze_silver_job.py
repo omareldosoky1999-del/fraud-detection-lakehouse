@@ -104,6 +104,27 @@ def _filter_transactions_already_committed(
     )
 
 
+def read_silver_history(spark, silver, touched_clients, history_start, *,
+                        iceberg_catalog, silver_path, legacy_hdfs_enabled):
+    """Recent Silver rows for the clients touched by this batch.
+
+    On the very first batch of an Iceberg lakehouse the Silver table does not exist
+    yet (it is created by this batch's own write), so history is empty.
+    """
+    if legacy_hdfs_enabled:
+        source = spark.read.parquet(str(silver_path))
+    else:
+        table = f"{iceberg_catalog}.{TABLES['silver']}"
+        if not spark.catalog.tableExists(table):
+            return silver.limit(0)
+        source = spark.table(table)
+    return (
+        source
+        .filter(F.col("event_time") >= F.lit(history_start))
+        .join(touched_clients, on="client_id", how="left_semi")
+    )
+
+
 def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
                           silver_path, quarantine_path, decisions_path,
                           commit_root=None,
@@ -135,6 +156,15 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
     start_metrics_server()
 
     def process_batch(batch_df: DataFrame, batch_id: int) -> None:
+        # foreachBatch re-evaluates the Kafka read + Avro decode for every
+        # action (isEmpty/count/collect/writes). Persist once per micro-batch.
+        batch_df = batch_df.persist()
+        try:
+            _process_batch(batch_df, batch_id)
+        finally:
+            batch_df.unpersist()
+
+    def _process_batch(batch_df: DataFrame, batch_id: int) -> None:
         if batch_df.rdd.isEmpty():
             return
 
@@ -246,20 +276,15 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
             return
 
         history_start = batch_min_event_time - timedelta(hours=history_hours)
-        if legacy_hdfs_enabled:
-            history = (
-                spark.read.parquet(str(silver_path))
-                .filter(F.col("event_time") >= F.lit(history_start))
-                .join(touched_clients, on="client_id", how="left_semi")
-            )
-        else:
-            history = (
-                spark.table(
-                    f"{iceberg_catalog}.{TABLES['silver']}"
-                )
-                .filter(F.col("event_time") >= F.lit(history_start))
-                .join(touched_clients, on="client_id", how="left_semi")
-            )
+        history = read_silver_history(
+            spark,
+            silver,
+            touched_clients,
+            history_start,
+            iceberg_catalog=iceberg_catalog,
+            silver_path=silver_path,
+            legacy_hdfs_enabled=legacy_hdfs_enabled,
+        )
         combined = history.unionByName(silver, allowMissingColumns=True).dropDuplicates(["transaction_id"])
         featured_all = add_fraud_features(combined)
         feature_batch = (
@@ -269,15 +294,16 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
             .cache()
         )
 
-        decided_all = apply_rules(featured_all)
-        if ml_models:
-            decided_all = apply_ml_ensemble(decided_all, ml_models, threshold=ml_threshold)
+        # Rules need the client history (window functions), but ML scoring is
+        # row-wise: restrict to this batch's transactions BEFORE scoring so the
+        # ensemble does not re-score up to 30 days of history every micro-batch.
         decided_batch = (
-            decided_all
+            apply_rules(featured_all)
             .join(batch_transactions, on="transaction_id", how="inner")
-            .withColumn("batch_token", F.lit(batch_token))
-            .cache()
         )
+        if ml_models:
+            decided_batch = apply_ml_ensemble(decided_batch, ml_models, threshold=ml_threshold)
+        decided_batch = decided_batch.withColumn("batch_token", F.lit(batch_token)).cache()
 
         if legacy_hdfs_enabled:
             (
@@ -349,7 +375,10 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
 
 
 def run(args):
-    spark = get_spark("fraud-bronze-silver")
+    # Iceberg tables live in Polaris and are always addressed as <catalog>.<ns>.<table>;
+    # Hive support would start an embedded Derby metastore in the working directory
+    # (fails when it is not writable). Only the legacy HDFS mode keeps it.
+    spark = get_spark("fraud-bronze-silver", enable_hive=args.no_iceberg)
     schema_json = SCHEMA_PATH.read_text()
 
     raw = (spark.readStream
@@ -361,7 +390,11 @@ def run(args):
           .load())
 
     events = decode_transactions(raw, schema_json)
-    events = events.withWatermark("kafka_timestamp", DEDUP_WATERMARK).dropDuplicates(["Trans_id"])
+    # dropDuplicates(["Trans_id"]) alone never evicts state because the watermark
+    # column is not part of the key; dropDuplicatesWithinWatermark bounds it.
+    events = (events
+              .withWatermark("kafka_timestamp", DEDUP_WATERMARK)
+              .dropDuplicatesWithinWatermark(["Trans_id"]))
 
     process_batch = build_batch_processor(
         spark,
