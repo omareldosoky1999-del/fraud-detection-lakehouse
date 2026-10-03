@@ -77,11 +77,16 @@ produce:
 
 verify:
 	bash scripts/wait_for_trino.sh
-	@for i in $$(seq 1 60); do \
-	  c=$$(docker exec trino trino --server http://localhost:8080 --execute "SELECT count(*) FROM polaris.gold.fraud_decisions" --output-format CSV_HEADER=false 2>/dev/null | tr -d '\r\"' || true); \
-	  echo "decision_rows=$$c"; \
-	  if [ "$${c:-0}" -gt 0 ] 2>/dev/null; then echo "OK: decisions are landing in Iceberg"; exit 0; fi; sleep 3; done; \
-	echo "FAILED: no decisions - stream log:"; docker exec spark-master bash -lc 'tail -120 /tmp/full-stack-stream.log'; exit 1
+	@echo "waiting for the first batches (model loading takes ~1-2 min)..."
+	@for i in $$(seq 1 90); do \
+	  out=$$(docker exec trino trino --server http://localhost:8080 --execute "SELECT count(*) FROM polaris.gold.fraud_decisions" 2>&1 | tr -d '\r\"'); \
+	  case "$$out" in \
+	    ''|*[!0-9]*) echo "[$$i/90] not ready yet: $$(echo $$out | cut -c1-110)";; \
+	    *) echo "decision_rows=$$out"; \
+	       if [ "$$out" -gt 0 ]; then echo "OK: decisions are landing in Iceberg"; exit 0; fi;; \
+	  esac; sleep 4; done; \
+	echo "FAILED: no decisions after ~6 min. Is the stream alive?"; \
+	docker exec spark-master bash -lc 'ps aux | grep -c "[b]ronze_silver_job"; grep -nE "Caused by|ERROR|Exception" /tmp/full-stack-stream.log | head -10; tail -40 /tmp/full-stack-stream.log'; exit 1
 
 e2e: up init train promote stream produce verify
 
