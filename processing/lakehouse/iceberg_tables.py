@@ -46,9 +46,12 @@ def _ensure_table(
     except Exception:
         pass
 
+    # In foreachBatch the batch DataFrame belongs to a *cloned* session, so the temp
+    # view must be registered and queried on that same session (not the outer one).
+    session = frame.sparkSession
     frame.createOrReplaceTempView(temp_view)
     partition_sql = ", ".join(partition_columns)
-    spark.sql(
+    session.sql(
         f"CREATE TABLE IF NOT EXISTS {table} "
         f"USING iceberg PARTITIONED BY ({partition_sql}) "
         f"AS SELECT * FROM {temp_view} WHERE 1=0"
