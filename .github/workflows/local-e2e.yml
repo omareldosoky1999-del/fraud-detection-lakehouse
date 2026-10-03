@@ -10,6 +10,8 @@ on:
       - "scripts/local_e2e.py"
       - "config/**"
       - "requirements*.txt"
+permissions:
+  contents: read
 jobs:
   local-e2e:
     runs-on: ubuntu-latest
