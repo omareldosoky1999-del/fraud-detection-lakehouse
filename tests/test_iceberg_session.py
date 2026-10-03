@@ -59,3 +59,33 @@ def test_ensure_table_runs_ctas_on_the_frames_session():
     assert frame.views == ["__v"]
     assert len(frame.sparkSession.sql_calls) == 1
     assert "FROM __v WHERE 1=0" in frame.sparkSession.sql_calls[0]
+
+
+def test_first_batch_has_empty_history_when_silver_table_is_missing(spark):
+    """First batch on an empty Iceberg lakehouse: Silver is created by this very batch,
+    so reading history must not fail with TABLE_OR_VIEW_NOT_FOUND."""
+    from datetime import datetime
+
+    from processing.streaming.bronze_silver_job import read_silver_history
+
+    class _Catalog:
+        def tableExists(self, _name):
+            return False
+
+    class _Spark:
+        catalog = _Catalog()
+
+        def table(self, name):  # must not be called
+            raise AssertionError(f"table() called for {name}")
+
+    silver = spark.createDataFrame(
+        [(1, 10, datetime(2026, 9, 1, 10, 0, 0), "tok")],
+        "transaction_id long, client_id long, event_time timestamp, batch_token string",
+    )
+    touched = silver.select("client_id").distinct()
+    history = read_silver_history(
+        _Spark(), silver, touched, datetime(2026, 8, 1),
+        iceberg_catalog="polaris", silver_path="unused", legacy_hdfs_enabled=False,
+    )
+    assert history.count() == 0
+    assert set(history.columns) == set(silver.columns)

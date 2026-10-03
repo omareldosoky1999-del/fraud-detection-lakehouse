@@ -104,6 +104,27 @@ def _filter_transactions_already_committed(
     )
 
 
+def read_silver_history(spark, silver, touched_clients, history_start, *,
+                        iceberg_catalog, silver_path, legacy_hdfs_enabled):
+    """Recent Silver rows for the clients touched by this batch.
+
+    On the very first batch of an Iceberg lakehouse the Silver table does not exist
+    yet (it is created by this batch's own write), so history is empty.
+    """
+    if legacy_hdfs_enabled:
+        source = spark.read.parquet(str(silver_path))
+    else:
+        table = f"{iceberg_catalog}.{TABLES['silver']}"
+        if not spark.catalog.tableExists(table):
+            return silver.limit(0)
+        source = spark.table(table)
+    return (
+        source
+        .filter(F.col("event_time") >= F.lit(history_start))
+        .join(touched_clients, on="client_id", how="left_semi")
+    )
+
+
 def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
                           silver_path, quarantine_path, decisions_path,
                           commit_root=None,
@@ -255,20 +276,15 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
             return
 
         history_start = batch_min_event_time - timedelta(hours=history_hours)
-        if legacy_hdfs_enabled:
-            history = (
-                spark.read.parquet(str(silver_path))
-                .filter(F.col("event_time") >= F.lit(history_start))
-                .join(touched_clients, on="client_id", how="left_semi")
-            )
-        else:
-            history = (
-                spark.table(
-                    f"{iceberg_catalog}.{TABLES['silver']}"
-                )
-                .filter(F.col("event_time") >= F.lit(history_start))
-                .join(touched_clients, on="client_id", how="left_semi")
-            )
+        history = read_silver_history(
+            spark,
+            silver,
+            touched_clients,
+            history_start,
+            iceberg_catalog=iceberg_catalog,
+            silver_path=silver_path,
+            legacy_hdfs_enabled=legacy_hdfs_enabled,
+        )
         combined = history.unionByName(silver, allowMissingColumns=True).dropDuplicates(["transaction_id"])
         featured_all = add_fraud_features(combined)
         feature_batch = (

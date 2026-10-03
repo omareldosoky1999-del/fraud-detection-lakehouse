@@ -57,6 +57,8 @@ the Docker stack only (see Known limitations).
 | datanode restarting forever, log says `Incompatible clusterIDs` | The namenode was re-formatted (new clusterID) while the datanode kept the old one. Reset the datanode: `docker rm -f datanode && make up`. The compose now formats the namenode only once (it used to check a path that was never populated) |
 | `make stream` dies with `AccessControlException ... inode="/"` | `/checkpoints` missing on HDFS: `bash scripts/init_hdfs_dirs.sh` (now creates it; `make stream` runs it automatically) |
 | Stream job dies with `Directory /app/metastore_db cannot be created` / `SessionHiveMetaStoreClient` | Hive support starts an embedded Derby in the cwd. Fixed: Iceberg mode disables Hive and `make` runs from `/tmp` |
+| Stream dies on the first batch with `TABLE_OR_VIEW_NOT_FOUND ... silver.transactions` | First batch on an empty lakehouse: Silver does not exist yet. Fixed (`read_silver_history` returns empty history) |
+| Log full of `REPORT_READ_METRICS` / `REPORT_WRITE_METRICS` Forbidden | Polaris denies Iceberg metrics reporting; harmless, now disabled via `rest-metrics-reporting-enabled=false`. `NoSuchTableException` 404s for new tables are normal (existence probes) |
 | Spark tests hang on a small machine | `export SPARK_LOCAL_IP=127.0.0.1` and lower `spark.sql.shuffle.partitions` |
 
 ## 5. Known limitations (read before calling this production)
