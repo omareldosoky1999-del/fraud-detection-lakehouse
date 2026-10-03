@@ -59,6 +59,7 @@ the Docker stack only (see Known limitations).
 | Stream job dies with `Directory /app/metastore_db cannot be created` / `SessionHiveMetaStoreClient` | Hive support starts an embedded Derby in the cwd. Fixed: Iceberg mode disables Hive and `make` runs from `/tmp` |
 | Stream dies on the first batch with `TABLE_OR_VIEW_NOT_FOUND ... silver.transactions` | First batch on an empty lakehouse: Silver does not exist yet. Fixed (`read_silver_history` returns empty history) |
 | Log full of `REPORT_READ_METRICS` / `REPORT_WRITE_METRICS` Forbidden | Polaris denies Iceberg metrics reporting; harmless, now disabled via `rest-metrics-reporting-enabled=false`. `NoSuchTableException` 404s for new tables are normal (existence probes) |
+| Stream dies with `ValidationException: Cannot delete file where some, but not all, rows match filter` | Iceberg planned a metadata-only DELETE for the idempotent batch replace and could not prove all rows of a file match. `_delete_batch_rows` now falls back to a row-level `MERGE ... WHEN MATCHED THEN DELETE` (not yet verified against a real Iceberg table) |
 | Spark tests hang on a small machine | `export SPARK_LOCAL_IP=127.0.0.1` and lower `spark.sql.shuffle.partitions` |
 
 ## 5. Known limitations (read before calling this production)

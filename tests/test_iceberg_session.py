@@ -89,3 +89,55 @@ def test_first_batch_has_empty_history_when_silver_table_is_missing(spark):
     )
     assert history.count() == 0
     assert set(history.columns) == set(silver.columns)
+
+
+class _SqlRecorder:
+    def __init__(self, fail_first_with=None):
+        self.statements = []
+        self._fail = fail_first_with
+
+    def sql(self, statement):
+        self.statements.append(statement)
+        if self._fail is not None and len(self.statements) == 1:
+            raise self._fail
+
+
+def test_delete_batch_rows_plain_delete_when_it_works():
+    from processing.lakehouse.iceberg_tables import _delete_batch_rows
+
+    spark = _SqlRecorder()
+    _delete_batch_rows(spark, "polaris.bronze.transactions", "tok", "(ingest_date = DATE '2026-10-03')")
+    assert len(spark.statements) == 1
+    assert spark.statements[0].startswith("DELETE FROM polaris.bronze.transactions WHERE batch_token = 'tok'")
+
+
+def test_delete_batch_rows_falls_back_to_merge_on_partial_file_error():
+    from processing.lakehouse.iceberg_tables import _delete_batch_rows
+
+    err = Exception("ValidationException: Cannot delete file where some, but not all, rows match filter x")
+    spark = _SqlRecorder(fail_first_with=err)
+    _delete_batch_rows(spark, "polaris.bronze.transactions", "tok", "(ingest_date = DATE '2026-10-03')")
+    assert len(spark.statements) == 2
+    assert spark.statements[1].startswith("MERGE INTO polaris.bronze.transactions AS t USING (SELECT 1 AS _k) AS s ON batch_token = 'tok'")
+    assert spark.statements[1].endswith("WHEN MATCHED THEN DELETE")
+
+
+def test_delete_batch_rows_reraises_unrelated_errors():
+    from processing.lakehouse.iceberg_tables import _delete_batch_rows
+
+    spark = _SqlRecorder(fail_first_with=RuntimeError("connection refused"))
+    with pytest.raises(RuntimeError):
+        _delete_batch_rows(spark, "t", "tok", "(ingest_date = DATE '2026-10-03')")
+    assert len(spark.statements) == 1
+
+
+def test_generated_sql_parses_with_the_spark_parser(spark):
+    """Parse-only check (no Iceberg needed): catches syntax mistakes in generated SQL."""
+    from processing.lakehouse.iceberg_tables import _delete_batch_rows
+
+    spark_rec = _SqlRecorder(fail_first_with=Exception("some, but not all, rows match filter"))
+    escaped = "tok'x".replace("'", "''")  # _replace_batch escapes before calling the helper
+    _delete_batch_rows(spark_rec, "polaris.bronze.transactions", escaped, "(ingest_date = DATE '2026-10-03')")
+    parser = spark._jsparkSession.sessionState().sqlParser()
+    for statement in spark_rec.statements:
+        parser.parsePlan(statement)  # raises ParseException on bad syntax
