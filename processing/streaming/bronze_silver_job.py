@@ -359,7 +359,10 @@ def build_batch_processor(spark, *, bronze_path=DEFAULT_BRONZE_PATH,
 
 
 def run(args):
-    spark = get_spark("fraud-bronze-silver")
+    # Iceberg tables live in Polaris and are always addressed as <catalog>.<ns>.<table>;
+    # Hive support would start an embedded Derby metastore in the working directory
+    # (fails when it is not writable). Only the legacy HDFS mode keeps it.
+    spark = get_spark("fraud-bronze-silver", enable_hive=args.no_iceberg)
     schema_json = SCHEMA_PATH.read_text()
 
     raw = (spark.readStream

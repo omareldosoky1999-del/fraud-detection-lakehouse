@@ -10,7 +10,9 @@ PROFILES  := --profile lakehouse --profile mlops --profile serving
 # ("Connection reset" / executor ids climbing). Bound cores and memory explicitly.
 SPARK_RES ?= --executor-memory 2g --driver-memory 2g --executor-cores 4 --total-executor-cores 4 --conf spark.sql.shuffle.partitions=8 --conf spark.default.parallelism=8
 SUBMIT    := /opt/spark/bin/spark-submit --master spark://spark-master:7077 $(SPARK_RES)
-EXEC      := docker exec -w /app
+# Run from /tmp (always writable). /app is the repo bind mount, which may not be writable
+# for the spark user (e.g. Windows drives); code paths are anchored to the repo root anyway.
+EXEC      := docker exec -w /tmp
 N_TRAIN   ?= 5000
 N_EVENTS  ?= 1500
 START     ?= 2026-09-01T10:00:00
